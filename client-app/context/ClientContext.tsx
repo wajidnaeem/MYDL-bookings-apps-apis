@@ -20,11 +20,13 @@ type ClientContextValue = {
   notifications: Notice[];
   updateProfile: (profile: Profile) => Promise<void>;
   declineInvitation: (id: string) => Promise<void>;
-  payDeposit: (id: string) => Promise<void>;
+  acceptPolicy: (id: string) => Promise<void>;
+  payDeposit: (id: string) => Promise<string>;
+  confirmPayment: (sessionId: string) => Promise<void>;
   cancelAppointment: (id: string) => Promise<void>;
   confirmAttendance: (id: string, code: string) => Promise<boolean>;
   reportProviderNoShow: (id: string, note: string) => Promise<string>;
-  raiseDispute: (input: { title: string; detail: string; evidence?: string; appointmentId?: string }) => Promise<string>;
+  raiseDispute: (input: { title: string; detail: string; evidence?: string; evidenceFile?: { name: string; data: string }; appointmentId?: string }) => Promise<string>;
 };
 
 const emptyProfile: Profile = { name: '', email: '', phone: '' };
@@ -80,8 +82,17 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     apply(await api.decline(id), setters);
   }, [setters]);
 
+  const acceptPolicy = useCallback(async (id: string) => {
+    apply(await api.acceptPolicy(id), setters);
+  }, [setters]);
+
   const payDeposit = useCallback(async (id: string) => {
-    apply(await api.pay(id), setters);
+    const result = await api.pay(id);
+    return result.url;
+  }, []);
+
+  const confirmPayment = useCallback(async (sessionId: string) => {
+    apply(await api.confirmPayment(sessionId), setters);
   }, [setters]);
 
   const cancelAppointment = useCallback(async (id: string) => {
@@ -100,7 +111,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     return result.id;
   }, [setters]);
 
-  const raiseDispute = useCallback(async (input: { title: string; detail: string; evidence?: string; appointmentId?: string }) => {
+  const raiseDispute = useCallback(async (input: { title: string; detail: string; evidence?: string; evidenceFile?: { name: string; data: string }; appointmentId?: string }) => {
     const result = await api.dispute(input);
     apply(result, setters);
     return result.id;
@@ -116,7 +127,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       notifications,
       updateProfile,
       declineInvitation,
+      acceptPolicy,
       payDeposit,
+      confirmPayment,
       cancelAppointment,
       confirmAttendance,
       reportProviderNoShow,
@@ -131,7 +144,9 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       notifications,
       updateProfile,
       declineInvitation,
+      acceptPolicy,
       payDeposit,
+      confirmPayment,
       cancelAppointment,
       confirmAttendance,
       reportProviderNoShow,

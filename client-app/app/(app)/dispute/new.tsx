@@ -1,10 +1,28 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Screen, TextField } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+
+function pickEvidence(onFile: (file: { name: string; data: string }) => void) {
+  const doc = (globalThis as { document?: { createElement: (tag: string) => any } }).document;
+  if (Platform.OS !== 'web' || !doc) return;
+  const input = doc.createElement('input');
+  input.type = 'file';
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = String(reader.result || '');
+      onFile({ name: file.name, data: data.split(',')[1] || '' });
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
 
 export default function NewDisputeScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -13,6 +31,7 @@ export default function NewDisputeScreen() {
   const [title, setTitle] = useState(linked ? `Issue with ${linked.provider}` : '');
   const [detail, setDetail] = useState('');
   const [evidence, setEvidence] = useState('');
+  const [file, setFile] = useState<{ name: string; data: string } | null>(null);
   const [error, setError] = useState('');
 
   async function submit() {
@@ -24,6 +43,7 @@ export default function NewDisputeScreen() {
       title: title || 'Dispute',
       detail: linked ? `${linked.provider} · ${linked.service}. ${detail.trim()}` : detail.trim(),
       evidence,
+      evidenceFile: file || undefined,
       appointmentId: linked?.id,
     });
     router.replace(`/dispute/${disputeId}`);
@@ -33,10 +53,10 @@ export default function NewDisputeScreen() {
     <Screen subtitle="Describe the problem and add any evidence you have.">
       <TextField label="Subject" value={title} onChangeText={setTitle} />
       <TextField label="Description" value={detail} onChangeText={setDetail} multiline placeholder="What should an administrator review?" />
-      <TextField label="Evidence note" value={evidence} onChangeText={setEvidence} placeholder="Receipt number, photo name, or message" />
-      <Pressable onPress={() => setEvidence((value) => value || 'photo-evidence.jpg')} style={styles.attach}>
+      <TextField label="Evidence note" value={evidence} onChangeText={setEvidence} placeholder="Receipt number or a short note" />
+      <Pressable onPress={() => pickEvidence(setFile)} style={styles.attach}>
         <View style={styles.dot} />
-        <Text style={styles.attachText}>{evidence ? `Attached: ${evidence}` : 'Attach a photo name'}</Text>
+        <Text style={styles.attachText}>{file ? `Attached: ${file.name}` : 'Attach a file'}</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button label="Submit dispute" onPress={submit} />

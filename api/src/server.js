@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
+import Stripe from 'stripe';
 
 const PORT = Number(process.env.PORT || 4000);
 const SECRET = process.env.MYDL_SECRET || 'mydl-dev-secret-change-me';
@@ -90,10 +91,27 @@ db.exec(`
   );
 `);
 
-const appointmentColumns = db.prepare('PRAGMA table_info(appointments)').all();
-if (!appointmentColumns.some((column) => column.name === 'deposit_outcome')) {
-  db.exec('ALTER TABLE appointments ADD COLUMN deposit_outcome TEXT');
+function addColumn(table, column, type) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!columns.some((item) => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
+addColumn('appointments', 'deposit_outcome', 'TEXT');
+addColumn('appointments', 'stripe_session_id', 'TEXT');
+addColumn('appointments', 'stripe_payment_intent', 'TEXT');
+addColumn('appointments', 'stripe_payment_method', 'TEXT');
+addColumn('appointments', 'timezone', 'TEXT');
+addColumn('appointments', 'policy_accepted_at', 'INTEGER');
+addColumn('appointments', 'reminded', 'INTEGER');
+addColumn('users', 'stripe_customer_id', 'TEXT');
+addColumn('provider_settings', 'stripe_account_id', 'TEXT');
+db.exec(`CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  actor_id TEXT,
+  action TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)`);
+fs.mkdirSync(path.join(dataDir, 'evidence'), { recursive: true });
 
 const policy = {
   lateAfterMinutes: 15,
@@ -130,8 +148,42 @@ async function sendCodeEmail(to, subject, intro, code) {
 
 function appointmentStart(row) {
   const date = String(row.date || '').replace(/^[A-Za-z]+,\s*/, '');
-  const parsed = Date.parse(`${date} ${String(row.time || '').trim()}`);
-  return Number.isNaN(parsed) ? null : parsed;
+  const time = String(row.time || '').trim();
+  const zone = row.timezone || 'UTC';
+  const utcGuess = Date.parse(`${date} ${time} UTC`);
+  if (Number.isNaN(utcGuess)) return null;
+  try {
+    const asZone = new Date(new Date(utcGuess).toLocaleString('en-US', { timeZone: zone }));
+    const asUtc = new Date(new Date(utcGuess).toLocaleString('en-US', { timeZone: 'UTC' }));
+    return utcGuess + (asUtc.getTime() - asZone.getTime());
+  } catch {
+    return Date.parse(`${date} ${time}`);
+  }
+}
+
+function audit(actorId, action, detail) {
+  db.prepare('INSERT INTO audit_log (id, actor_id, action, detail, created_at) VALUES (?, ?, ?, ?, ?)').run(
+    crypto.randomUUID(), actorId || null, action, detail, Date.now(),
+  );
+}
+
+function keepDeposit(row) {
+  if (!row.deposit_paid || row.deposit_outcome === 'refunded' || row.deposit_outcome === 'kept') return;
+  const detail = `${row.provider_name} · ${row.service}`;
+  db.prepare("UPDATE appointments SET deposit_outcome = 'kept' WHERE id = ?").run(row.id);
+  if (row.client_id) {
+    const held = db.prepare("SELECT id FROM transactions WHERE user_id = ? AND title = 'Deposit' AND detail = ? AND status = 'Held' ORDER BY created_at DESC LIMIT 1").get(row.client_id, detail);
+    if (held) db.prepare("UPDATE transactions SET status = 'Kept' WHERE id = ?").run(held.id);
+    else insertTransaction(row.client_id, 'Deposit kept', detail, row.deposit, 'Kept');
+  }
+}
+
+function saveEvidence(file) {
+  if (!file || typeof file !== 'object' || !file.data) return null;
+  const safe = String(file.name || 'evidence').replace(/[^a-zA-Z0-9._-]/g, '') || 'evidence';
+  const filename = `${crypto.randomUUID()}-${safe}`;
+  fs.writeFileSync(path.join(dataDir, 'evidence', filename), Buffer.from(String(file.data), 'base64'));
+  return `/evidence/${filename}`;
 }
 
 function rulesFor(providerId) {
@@ -161,6 +213,84 @@ function insertTransaction(userId, title, detail, amount, status) {
   db.prepare('INSERT INTO transactions (id, user_id, title, detail, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
     crypto.randomUUID(), userId, title, detail, amount, status, Date.now(),
   );
+}
+
+function stripeClient() {
+  if (!process.env.STRIPE_SECRET_KEY) return null;
+  return new Stripe(process.env.STRIPE_SECRET_KEY);
+}
+
+function requireStripe() {
+  const client = stripeClient();
+  if (!client) {
+    const error = new Error('Add STRIPE_SECRET_KEY to api/.env, then restart the API.');
+    error.status = 503;
+    throw error;
+  }
+  return client;
+}
+
+function moneyToCents(amount) {
+  const cents = Math.round(feeAmount(amount) * 100);
+  if (cents < 50) {
+    const error = new Error('The amount must be at least $0.50.');
+    error.status = 400;
+    throw error;
+  }
+  return cents;
+}
+
+function appUrl(name, fallback) {
+  return String(process.env[name] || fallback).replace(/\/$/, '');
+}
+
+async function stripeCustomer(user) {
+  if (user.stripe_customer_id) return user.stripe_customer_id;
+  const customer = await requireStripe().customers.create({
+    email: user.email,
+    name: user.name,
+    metadata: { userId: user.id },
+  });
+  db.prepare('UPDATE users SET stripe_customer_id = ? WHERE id = ?').run(customer.id, user.id);
+  return customer.id;
+}
+
+async function refundStripeDeposit(row) {
+  const client = stripeClient();
+  if (!client || !row.stripe_payment_intent) return;
+  const existing = await client.refunds.list({ payment_intent: row.stripe_payment_intent, limit: 1 });
+  if (existing.data.length) return;
+  await client.refunds.create({ payment_intent: row.stripe_payment_intent });
+}
+
+async function releaseStripeDeposit(row) {
+  const detail = `${row.provider_name} · ${row.service}`;
+  if (row.client_id) {
+    const held = db.prepare("SELECT id FROM transactions WHERE user_id = ? AND title = 'Deposit' AND detail = ? AND status = 'Held' ORDER BY created_at DESC LIMIT 1").get(row.client_id, detail);
+    if (held) db.prepare("UPDATE transactions SET status = 'Released' WHERE id = ?").run(held.id);
+  }
+  if (row.deposit_outcome !== 'refunded' && row.deposit_outcome !== 'kept') {
+    db.prepare("UPDATE appointments SET deposit_outcome = 'released' WHERE id = ?").run(row.id);
+  }
+  const client = stripeClient();
+  const settings = row.provider_id
+    ? db.prepare('SELECT stripe_account_id FROM provider_settings WHERE user_id = ?').get(row.provider_id)
+    : null;
+  if (!client || !row.stripe_payment_intent || !settings?.stripe_account_id) return;
+  const intent = await client.paymentIntents.retrieve(row.stripe_payment_intent);
+  const chargeId = typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge?.id;
+  if (!chargeId) return;
+  await client.transfers.create({
+    amount: moneyToCents(row.deposit),
+    currency: 'usd',
+    destination: settings.stripe_account_id,
+    source_transaction: chargeId,
+  });
+}
+
+function markDepositPaid(row, paymentIntentId) {
+  db.prepare("UPDATE appointments SET status = 'upcoming', deposit_paid = 1, stripe_payment_intent = ? WHERE id = ?").run(paymentIntentId || row.stripe_payment_intent, row.id);
+  insertTransaction(row.client_id, 'Deposit', `${row.provider_name} · ${row.service}`, row.deposit, 'Held');
 }
 
 function hashPassword(password) {
@@ -212,6 +342,7 @@ function mapAppointment(row) {
     service: row.service,
     date: row.date,
     time: row.time,
+    timezone: row.timezone || 'UTC',
     duration: row.duration,
     location: row.location,
     price: row.price,
@@ -219,6 +350,7 @@ function mapAppointment(row) {
     status: row.status,
     depositPaid: Boolean(row.deposit_paid),
     attended: Boolean(row.attended),
+    policyAccepted: Boolean(row.policy_accepted_at),
   };
 }
 
@@ -344,6 +476,7 @@ function providerSnapshot(user) {
       contact: settings.contact || user.phone,
       payoutMethod: settings.payout_method || '',
       payoutDetails: settings.payout_details || '',
+      payoutConnected: Boolean(settings.stripe_account_id),
     },
     policy: {
       lateAfterMinutes: settings.late_after_minutes ?? 15,
@@ -520,6 +653,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && url.pathname === '/admin') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(fs.readFileSync(path.join(root, '..', 'public', 'admin.html')));
+      return;
+    }
+
     if (req.method === 'GET' && parts[0] === 'demo' && parts[1] === 'qr' && parts[2]) {
       const row = db.prepare('SELECT * FROM appointments WHERE id = ?').get(parts[2]);
       if (!row?.qr_token) {
@@ -580,18 +719,68 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'POST' && parts[0] === 'appointments' && parts[2] === 'pay') {
+    if (req.method === 'POST' && parts[0] === 'appointments' && parts[2] === 'accept-policy') {
       const row = ownAppointment(user, parts[1]);
       if (!row) return send(res, 404, { error: 'Appointment not found.' });
+      db.prepare('UPDATE appointments SET policy_accepted_at = ? WHERE id = ?').run(Date.now(), row.id);
+      audit(user.id, 'policy-accepted', row.service);
+      send(res, 200, snapshot(user.id));
+      return;
+    }
+
+    if (req.method === 'POST' && parts[0] === 'appointments' && parts[2] === 'checkout') {
+      const row = ownAppointment(user, parts[1]);
+      if (!row) return send(res, 404, { error: 'Appointment not found.' });
+      if (row.deposit_paid) return send(res, 409, { error: 'This deposit is already paid.' });
+      if (!row.policy_accepted_at) return send(res, 400, { error: 'Accept the visit terms before paying.' });
+      const stripe = requireStripe();
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        customer: await stripeCustomer(user),
+        client_reference_id: row.id,
+        line_items: [{
+          quantity: 1,
+          price_data: {
+            currency: 'usd',
+            unit_amount: moneyToCents(row.deposit),
+            product_data: { name: `${row.provider_name} deposit · ${row.service}` },
+          },
+        }],
+        success_url: `${appUrl('CLIENT_APP_URL', 'http://localhost:8081')}/payment-result?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl('CLIENT_APP_URL', 'http://localhost:8081')}/checkout/${row.id}`,
+        metadata: { appointmentId: row.id },
+        payment_intent_data: { setup_future_usage: 'off_session', metadata: { appointmentId: row.id } },
+      });
+      db.prepare('UPDATE appointments SET stripe_session_id = ? WHERE id = ?').run(session.id, row.id);
+      send(res, 200, { url: session.url });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/payments/confirm') {
+      const body = await readBody(req);
+      const stripe = requireStripe();
+      const session = await stripe.checkout.sessions.retrieve(String(body.sessionId || ''));
+      if (session.payment_status !== 'paid') return send(res, 402, { error: 'The card payment is not complete.' });
+      const row = ownAppointment(user, session.client_reference_id);
+      if (!row) return send(res, 404, { error: 'Appointment not found.' });
+      const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
       if (!row.deposit_paid) {
-        db.prepare("UPDATE appointments SET status = 'upcoming', deposit_paid = 1 WHERE id = ?").run(row.id);
-        db.prepare('INSERT INTO transactions (id, user_id, title, detail, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-          crypto.randomUUID(), user.id, 'Deposit', `${row.provider_name} · ${row.service}`, row.deposit, 'Held', Date.now(),
-        );
+        markDepositPaid(row, paymentIntentId);
+        if (paymentIntentId) {
+          const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          const methodId = typeof intent.payment_method === 'string' ? intent.payment_method : intent.payment_method?.id;
+          if (methodId) db.prepare('UPDATE appointments SET stripe_payment_method = ? WHERE id = ?').run(methodId, row.id);
+        }
+        audit(user.id, 'deposit-paid', `${row.deposit} for ${row.service}`);
         await notify(user.id, 'Deposit held', `${row.deposit} for ${row.provider_name} is held until the visit.`);
         if (row.provider_id) await notify(row.provider_id, 'Deposit received', `${row.deposit} from a client is held for ${row.service}.`);
       }
       send(res, 200, snapshot(user.id));
+      return;
+    }
+
+    if (req.method === 'POST' && parts[0] === 'appointments' && parts[2] === 'pay') {
+      send(res, 400, { error: 'Pay the deposit through card checkout.' });
       return;
     }
 
@@ -608,6 +797,7 @@ const server = http.createServer(async (req, res) => {
         );
         let message = 'The appointment was cancelled.';
         if (row.deposit_paid && refund) {
+          await refundStripeDeposit(row);
           insertTransaction(user.id, 'Refund', detail, row.deposit, 'Refunded');
           message = `The ${row.deposit} deposit is refunded.`;
         } else if (row.deposit_paid) {
@@ -635,12 +825,38 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       db.prepare("UPDATE appointments SET attended = 1, status = 'completed', qr_token = NULL WHERE id = ?").run(row.id);
+      try {
+        await releaseStripeDeposit(row);
+      } catch (releaseError) {
+        await notify(row.provider_id || user.id, 'Payout pending', releaseError instanceof Error ? releaseError.message : 'The deposit is released in MYDL, but the bank transfer is still pending.');
+      }
       const rules = rulesFor(row.provider_id);
       const start = appointmentStart(row);
       const late = start != null && Date.now() >= start + rules.lateAfterMinutes * 60 * 1000 && feeAmount(rules.lateFee) > 0;
       if (late) {
-        insertTransaction(user.id, 'Late fee', `${row.provider_name} · ${row.service}`, rules.lateFee, 'Due');
-        if (row.provider_id) await notify(row.provider_id, 'Late fee', `A late fee of ${rules.lateFee} applies for ${row.service}.`);
+        let charged = false;
+        const fresh = db.prepare('SELECT * FROM appointments WHERE id = ?').get(row.id);
+        const customerId = db.prepare('SELECT stripe_customer_id FROM users WHERE id = ?').get(user.id)?.stripe_customer_id;
+        const stripe = stripeClient();
+        if (stripe && fresh.stripe_payment_method && customerId) {
+          try {
+            await stripe.paymentIntents.create({
+              amount: moneyToCents(rules.lateFee),
+              currency: 'usd',
+              customer: customerId,
+              payment_method: fresh.stripe_payment_method,
+              off_session: true,
+              confirm: true,
+              description: `Late fee · ${row.service}`,
+            });
+            charged = true;
+          } catch (chargeError) {
+            audit(user.id, 'late-fee-failed', chargeError instanceof Error ? chargeError.message : 'Late fee charge failed');
+          }
+        }
+        insertTransaction(user.id, 'Late fee', `${row.provider_name} · ${row.service}`, rules.lateFee, charged ? 'Charged' : 'Due');
+        audit(user.id, 'late-fee', `${rules.lateFee} ${charged ? 'charged' : 'due'} for ${row.service}`);
+        if (row.provider_id) await notify(row.provider_id, 'Late fee', `A late fee of ${rules.lateFee} ${charged ? 'was charged' : 'is due'} for ${row.service}.`);
       }
       await notify(user.id, 'Attendance confirmed', late
         ? `Your visit with ${row.provider_name} is confirmed. A late fee of ${rules.lateFee} applies.`
@@ -670,10 +886,12 @@ const server = http.createServer(async (req, res) => {
         send(res, 400, { error: 'Describe the issue in a sentence or two.' });
         return;
       }
+      const evidence = saveEvidence(body.evidenceFile) || String(body.evidence || '').trim() || null;
       const id = crypto.randomUUID();
       db.prepare('INSERT INTO disputes (id, user_id, appointment_id, title, detail, evidence, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-        id, user.id, body.appointmentId || null, String(body.title || 'Dispute').trim(), detail, String(body.evidence || '').trim() || null, 'In review', Date.now(),
+        id, user.id, body.appointmentId || null, String(body.title || 'Dispute').trim(), detail, evidence, 'In review', Date.now(),
       );
+      audit(user.id, 'dispute-opened', String(body.title || 'Dispute'));
       await notify(user.id, 'Dispute opened', 'You can track the decision in Disputes.');
       const payload = user.role === 'provider' ? providerSnapshot(user) : snapshot(user.id);
       send(res, 201, { id, ...payload });
@@ -691,13 +909,36 @@ const server = http.createServer(async (req, res) => {
       const settings = db.prepare('SELECT * FROM provider_settings WHERE user_id = ?').get(user.id);
       const id = crypto.randomUUID();
       db.prepare(`INSERT INTO appointments
-        (id, client_id, provider_id, provider_name, service, date, time, duration, location, price, deposit, status, deposit_paid, attended)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 0)`).run(
-        id, client.id, user.id, settings?.business_name || user.name, String(body.service || 'Appointment'), String(body.date || ''), String(body.time || ''), String(body.duration || '30 min'), String(body.location || settings?.location || ''), String(body.price || '$0.00'), String(body.deposit || '$0.00'),
+        (id, client_id, provider_id, provider_name, service, date, time, timezone, duration, location, price, deposit, status, deposit_paid, attended)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 0)`).run(
+        id, client.id, user.id, settings?.business_name || user.name, String(body.service || 'Appointment'), String(body.date || ''), String(body.time || ''), String(body.timezone || 'UTC'), String(body.duration || '30 min'), String(body.location || settings?.location || ''), String(body.price || '$0.00'), String(body.deposit || '$0.00'),
       );
       await notify(client.id, 'Appointment invitation', `${user.name} invited you to ${body.service || 'an appointment'}.`);
       const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
       send(res, 201, { id, ...providerSnapshot(fresh) });
+      return;
+    }
+
+    if (req.method === 'PATCH' && parts[0] === 'provider' && parts[1] === 'appointments' && parts.length === 3) {
+      if (!requireRole(user, res, 'provider')) return;
+      const row = db.prepare('SELECT * FROM appointments WHERE id = ? AND provider_id = ?').get(parts[2], user.id);
+      if (!row) return send(res, 404, { error: 'Appointment not found.' });
+      if (row.status === 'completed' || row.status === 'cancelled') return send(res, 400, { error: 'This visit can no longer be edited.' });
+      const body = await readBody(req);
+      db.prepare(`UPDATE appointments SET service = ?, date = ?, time = ?, timezone = ?, duration = ?, location = ?, price = ?, deposit = ?, reminded = 0 WHERE id = ?`).run(
+        String(body.service || row.service),
+        String(body.date || row.date),
+        String(body.time || row.time),
+        String(body.timezone || row.timezone || 'UTC'),
+        String(body.duration || row.duration),
+        String(body.location || row.location),
+        String(body.price || row.price),
+        String(body.deposit || row.deposit),
+        row.id,
+      );
+      if (row.client_id) await notify(row.client_id, 'Visit updated', `${user.name} updated ${body.service || row.service}.`);
+      audit(user.id, 'visit-updated', row.id);
+      send(res, 200, providerSnapshot(user));
       return;
     }
 
@@ -709,6 +950,33 @@ const server = http.createServer(async (req, res) => {
       const expiresAt = Date.now() + 1000 * 60 * 10;
       db.prepare('UPDATE appointments SET qr_token = ?, qr_expires_at = ? WHERE id = ?').run(token, expiresAt, row.id);
       send(res, 200, { token, expiresAt, previewPath: `/demo/qr/${row.id}` });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/provider/payout-link') {
+      if (!requireRole(user, res, 'provider')) return;
+      const stripe = requireStripe();
+      const settings = db.prepare('SELECT * FROM provider_settings WHERE user_id = ?').get(user.id);
+      let accountId = settings?.stripe_account_id;
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: 'express',
+          country: process.env.STRIPE_CONNECT_COUNTRY || 'US',
+          email: user.email,
+          capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+          business_profile: { name: settings?.business_name || user.name },
+        });
+        accountId = account.id;
+        if (settings) db.prepare('UPDATE provider_settings SET stripe_account_id = ? WHERE user_id = ?').run(accountId, user.id);
+        else db.prepare('INSERT INTO provider_settings (user_id, business_name, stripe_account_id) VALUES (?, ?, ?)').run(user.id, user.name, accountId);
+      }
+      const link = await stripe.accountLinks.create({
+        account: accountId,
+        type: 'account_onboarding',
+        refresh_url: `${appUrl('PROVIDER_APP_URL', 'http://localhost:8082')}/payout`,
+        return_url: `${appUrl('PROVIDER_APP_URL', 'http://localhost:8082')}/payout`,
+      });
+      send(res, 200, { url: link.url });
       return;
     }
 
@@ -763,6 +1031,7 @@ const server = http.createServer(async (req, res) => {
       if (row.status !== 'cancelled') {
         db.prepare("UPDATE appointments SET status = 'cancelled', deposit_outcome = ? WHERE id = ?").run(row.deposit_paid ? 'refunded' : null, row.id);
         if (row.deposit_paid && row.client_id) {
+          await refundStripeDeposit(row);
           db.prepare('INSERT INTO transactions (id, user_id, title, detail, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
             crypto.randomUUID(), row.client_id, 'Refund', `${row.provider_name} · ${row.service}`, row.deposit, 'Refunded', Date.now(),
           );
@@ -784,8 +1053,10 @@ const server = http.createServer(async (req, res) => {
       db.prepare('INSERT INTO disputes (id, user_id, appointment_id, title, detail, evidence, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
         id, user.id, row.id, 'Client no-show', detail, null, 'In review', Date.now(),
       );
-      if (row.client_id) await notify(row.client_id, 'No-show claim', `${user.name} reported that you did not attend.`);
-      await notify(user.id, 'No-show submitted', 'An administrator will review the claim.');
+      keepDeposit(row);
+      audit(user.id, 'client-no-show', `${row.service} deposit kept`);
+      if (row.client_id) await notify(row.client_id, 'No-show claim', `${user.name} reported that you did not attend. The deposit is kept.`);
+      await notify(user.id, 'No-show submitted', 'The deposit is kept under the no-show rule. An administrator can still review the claim.');
       send(res, 201, { id, ...providerSnapshot(user) });
       return;
     }
@@ -822,18 +1093,78 @@ const server = http.createServer(async (req, res) => {
       if (!status) return send(res, 400, { error: 'A status is required.' });
       const row = db.prepare('SELECT * FROM disputes WHERE id = ?').get(parts[2]);
       if (!row) return send(res, 404, { error: 'Dispute not found.' });
+      const visit = row.appointment_id ? db.prepare('SELECT * FROM appointments WHERE id = ?').get(row.appointment_id) : null;
+      const decision = status.toLowerCase();
+      if (visit && (decision === 'refunded' || decision === 'refund')) {
+        await refundStripeDeposit(visit);
+        if (visit.deposit_paid && visit.deposit_outcome !== 'refunded' && visit.client_id) {
+          insertTransaction(visit.client_id, 'Refund', `${visit.provider_name} · ${visit.service}`, visit.deposit, 'Refunded');
+          db.prepare("UPDATE appointments SET status = 'cancelled', deposit_outcome = 'refunded' WHERE id = ?").run(visit.id);
+        }
+      }
+      if (visit && (decision === 'released' || decision === 'payout')) {
+        await releaseStripeDeposit(visit);
+      }
       db.prepare('UPDATE disputes SET status = ? WHERE id = ?').run(status, row.id);
+      audit(user.id, 'dispute-updated', `${row.id} is now ${status}`);
       await notify(row.user_id, 'Dispute updated', `Your dispute is now ${status}.`);
       send(res, 200, { ok: true });
       return;
     }
 
+    if (req.method === 'GET' && url.pathname === '/admin/summary') {
+      if (!requireRole(user, res, 'admin')) return;
+      const count = (sql) => db.prepare(sql).get().n;
+      send(res, 200, {
+        users: count('SELECT COUNT(*) AS n FROM users'),
+        clients: count("SELECT COUNT(*) AS n FROM users WHERE role = 'client'"),
+        providers: count("SELECT COUNT(*) AS n FROM users WHERE role = 'provider'"),
+        appointments: count('SELECT COUNT(*) AS n FROM appointments'),
+        upcoming: count("SELECT COUNT(*) AS n FROM appointments WHERE status = 'upcoming'"),
+        cancelled: count("SELECT COUNT(*) AS n FROM appointments WHERE status = 'cancelled'"),
+        disputes: count('SELECT COUNT(*) AS n FROM disputes'),
+        openDisputes: count("SELECT COUNT(*) AS n FROM disputes WHERE status = 'In review'"),
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/admin/audit') {
+      if (!requireRole(user, res, 'admin')) return;
+      send(res, 200, { audit: db.prepare('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 200').all() });
+      return;
+    }
+
+    if (req.method === 'GET' && parts[0] === 'evidence' && parts[1]) {
+      const filename = path.basename(parts[1]);
+      const file = path.join(dataDir, 'evidence', filename);
+      if (!fs.existsSync(file)) return send(res, 404, { error: 'Evidence not found.' });
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Access-Control-Allow-Origin': '*' });
+      res.end(fs.readFileSync(file));
+      return;
+    }
+
     send(res, 404, { error: 'Not found.' });
   } catch (error) {
-    send(res, 500, { error: error instanceof Error ? error.message : 'Server error.' });
+    send(res, error.status || 500, { error: error instanceof Error ? error.message : 'Server error.' });
   }
 });
 
 server.listen(PORT, () => {
   console.log(`MYDL API listening on http://localhost:${PORT}`);
 });
+
+function sendReminders() {
+  const rows = db.prepare("SELECT * FROM appointments WHERE status = 'upcoming' AND IFNULL(reminded, 0) = 0").all();
+  for (const row of rows) {
+    const start = appointmentStart(row);
+    if (start == null) continue;
+    const until = start - Date.now();
+    if (until > 0 && until <= 24 * 60 * 60 * 1000) {
+      notify(row.client_id, 'Upcoming visit', `${row.provider_name} · ${row.service} is within 24 hours, ${row.date} at ${row.time}.`).catch(() => {});
+      if (row.provider_id) notify(row.provider_id, 'Upcoming visit', `${row.service} is within 24 hours.`).catch(() => {});
+      db.prepare('UPDATE appointments SET reminded = 1 WHERE id = ?').run(row.id);
+    }
+  }
+}
+setInterval(sendReminders, 60_000);
+sendReminders();

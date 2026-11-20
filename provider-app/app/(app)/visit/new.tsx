@@ -12,6 +12,7 @@ export default function NewVisitScreen() {
   const [service, setService] = useState('Consultation');
   const [date, setDate] = useState('Thu, 27 Nov 2026');
   const [time, setTime] = useState('3:00 PM');
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   const [duration, setDuration] = useState('45 min');
   const [location, setLocation] = useState(business.location);
   const [price, setPrice] = useState('$80.00');
@@ -23,7 +24,7 @@ export default function NewVisitScreen() {
     setBusy(true);
     setError('');
     try {
-      const id = await createVisit({ clientEmail, service, date, time, duration, location, price, deposit });
+      const id = await createVisit({ clientEmail, service, date, time, timezone, duration, location, price, deposit });
       router.replace(`/visit/${id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the visit.');
@@ -38,6 +39,7 @@ export default function NewVisitScreen() {
       <TextField label="Service" value={service} onChangeText={setService} />
       <TextField label="Date" value={date} onChangeText={setDate} />
       <TextField label="Time" value={time} onChangeText={setTime} />
+      <TextField label="Time zone" value={timezone} onChangeText={setTimezone} autoCapitalize="none" placeholder="America/New_York" />
       <TextField label="Duration" value={duration} onChangeText={setDuration} />
       <TextField label="Location" value={location} onChangeText={setLocation} />
       <TextField label="Price" value={price} onChangeText={setPrice} />

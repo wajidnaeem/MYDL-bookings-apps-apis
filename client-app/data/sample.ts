@@ -6,6 +6,8 @@ export type Appointment = {
   service: string;
   date: string;
   time: string;
+  timezone?: string;
+  policyAccepted?: boolean;
   duration: string;
   location: string;
   price: string;

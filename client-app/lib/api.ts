@@ -65,13 +65,16 @@ export const api = {
   me: () => request<Snapshot>('/me'),
   updateProfile: (profile: Snapshot['profile']) => request<Snapshot>('/me', { method: 'PATCH', body: JSON.stringify(profile) }),
   decline: (id: string) => request<Snapshot>(`/appointments/${id}/decline`, { method: 'POST' }),
-  pay: (id: string) => request<Snapshot>(`/appointments/${id}/pay`, { method: 'POST' }),
+  acceptPolicy: (id: string) => request<Snapshot>(`/appointments/${id}/accept-policy`, { method: 'POST' }),
+  pay: (id: string) => request<{ url: string }>(`/appointments/${id}/checkout`, { method: 'POST' }),
+  confirmPayment: (sessionId: string) =>
+    request<Snapshot>('/payments/confirm', { method: 'POST', body: JSON.stringify({ sessionId }) }),
   cancel: (id: string) => request<Snapshot>(`/appointments/${id}/cancel`, { method: 'POST' }),
   attend: (id: string, code: string) =>
     request<Snapshot & { ok: boolean }>(`/appointments/${id}/attend`, { method: 'POST', body: JSON.stringify({ code }) }),
   noShow: (id: string, note: string) =>
     request<Snapshot & { id: string }>(`/appointments/${id}/no-show`, { method: 'POST', body: JSON.stringify({ note }) }),
-  dispute: (input: { title: string; detail: string; evidence?: string; appointmentId?: string }) =>
+  dispute: (input: { title: string; detail: string; evidence?: string; evidenceFile?: { name: string; data: string }; appointmentId?: string }) =>
     request<Snapshot & { id: string }>('/disputes', { method: 'POST', body: JSON.stringify(input) }),
   registerDevice: (pushToken: string) =>
     request<{ ok: boolean }>('/devices', { method: 'POST', body: JSON.stringify({ token: pushToken }) }),

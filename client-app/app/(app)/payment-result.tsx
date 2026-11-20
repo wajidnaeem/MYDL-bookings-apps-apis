@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 
 import { Button, Card, Screen } from '@/components/ui';
@@ -6,19 +7,29 @@ import { theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
 
 export default function PaymentResultScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { appointments, transactions } = useClient();
-  const appointment = appointments.find((item) => item.id === id);
-  const receipt = transactions.find((item) => item.detail.startsWith(appointment?.provider ?? '---'));
+  const { id, session_id: sessionId } = useLocalSearchParams<{ id?: string; session_id?: string }>();
+  const { appointments, transactions, confirmPayment } = useClient();
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(!sessionId);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    confirmPayment(String(sessionId))
+      .then(() => setReady(true))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not confirm the payment.'));
+  }, [sessionId, confirmPayment]);
+
+  const appointment = appointments.find((item) => item.id === id) || appointments.find((item) => item.depositPaid);
+  const receipt = transactions.find((item) => item.title === 'Deposit' && item.detail.startsWith(appointment?.provider ?? '---'));
 
   return (
     <Screen>
       <Card>
-        <Text style={styles.title}>Deposit paid</Text>
+        <Text style={styles.title}>{error ? 'Payment not confirmed' : ready ? 'Deposit paid' : 'Confirming payment…'}</Text>
         <Text style={styles.body}>
-          {appointment
+          {error || (appointment
             ? `${appointment.deposit} for ${appointment.provider} is held until attendance is confirmed.`
-            : 'Your deposit is held until attendance is confirmed.'}
+            : 'Your deposit is held until attendance is confirmed.')}
         </Text>
       </Card>
       {receipt ? <Button label="View receipt" variant="secondary" onPress={() => router.push(`/receipt/${receipt.id}`)} /> : null}

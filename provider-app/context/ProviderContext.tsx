@@ -7,10 +7,12 @@ import type { Business, Dashboard, Dispute, Notice, Policy, Visit } from '@/lib/
 type ProviderContextValue = Dashboard & {
   createVisit: (input: Parameters<typeof api.createVisit>[0]) => Promise<string>;
   saveSettings: (input: Partial<Business & Policy>) => Promise<void>;
+  connectPayout: () => Promise<string>;
   makeQr: (id: string) => Promise<void>;
   cancelVisit: (id: string) => Promise<void>;
   reportNoShow: (id: string, note: string) => Promise<string>;
-  raiseDispute: (input: { title: string; detail: string; appointmentId?: string }) => Promise<string>;
+  updateVisit: (id: string, input: Parameters<typeof api.updateVisit>[1]) => Promise<void>;
+  raiseDispute: (input: { title: string; detail: string; evidenceFile?: { name: string; data: string }; appointmentId?: string }) => Promise<string>;
   refresh: () => Promise<void>;
 };
 
@@ -53,9 +55,16 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
       async saveSettings(input) {
         setData(await api.saveSettings(input));
       },
+      async connectPayout() {
+        const result = await api.connectPayout();
+        return result.url;
+      },
       async makeQr(id) {
         await api.makeQr(id);
         await refresh();
+      },
+      async updateVisit(id, input) {
+        setData(await api.updateVisit(id, input));
       },
       async cancelVisit(id) {
         setData(await api.cancel(id));

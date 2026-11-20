@@ -19,6 +19,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="visit/new" options={{ title: 'New visit' }} />
       <Stack.Screen name="visit/[id]" options={{ title: 'Visit' }} />
+      <Stack.Screen name="visit-edit/[id]" options={{ title: 'Edit visit' }} />
       <Stack.Screen name="qr/[id]" options={{ title: 'Attendance QR' }} />
       <Stack.Screen name="no-show/[id]" options={{ title: 'Client no-show' }} />
       <Stack.Screen name="business-edit" options={{ title: 'Business profile' }} />

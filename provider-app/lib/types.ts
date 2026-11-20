@@ -6,6 +6,7 @@ export type Visit = {
   service: string;
   date: string;
   time: string;
+  timezone?: string;
   duration: string;
   location: string;
   price: string;
@@ -16,7 +17,7 @@ export type Visit = {
   clientName: string;
   clientEmail: string;
   hasQr?: boolean;
-  depositOutcome?: 'refunded' | 'kept' | null;
+  depositOutcome?: 'refunded' | 'kept' | 'released' | null;
 };
 
 export type Business = {
@@ -26,6 +27,7 @@ export type Business = {
   contact: string;
   payoutMethod: string;
   payoutDetails: string;
+  payoutConnected?: boolean;
 };
 
 export type Policy = {

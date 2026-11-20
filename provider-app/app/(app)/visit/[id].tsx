@@ -12,7 +12,7 @@ export default function VisitScreen() {
 
   if (!visit) return <Screen subtitle="This visit is no longer available." />;
 
-  const message = `${business.businessName} invited you to ${visit.service} on ${visit.date} at ${visit.time}. Open the MYDL client app to accept. Deposit ${visit.deposit}.`;
+  const message = `${business.businessName} invited you to ${visit.service} on ${visit.date} at ${visit.time} (${visit.timezone || 'UTC'}). Open your private link: ${process.env.EXPO_PUBLIC_CLIENT_URL || 'http://localhost:8081'}/appointment/${visit.id} Deposit ${visit.deposit}.`;
 
   return (
     <Screen>
@@ -21,13 +21,16 @@ export default function VisitScreen() {
         <Text style={styles.title}>{visit.clientName || visit.clientEmail}</Text>
         <Row label="Email" value={visit.clientEmail} />
         <Row label="Service" value={visit.service} />
-        <Row label="When" value={`${visit.date} · ${visit.time}`} />
+        <Row label="When" value={`${visit.date} · ${visit.time} · ${visit.timezone || 'UTC'}`} />
         <Row label="Duration" value={visit.duration} />
         <Row label="Location" value={visit.location} />
         <Row label="Price" value={visit.price} />
         <Row label="Deposit" value={visit.depositPaid ? `${visit.deposit} paid` : visit.deposit} />
       </Card>
       <Button label="Share invitation" variant="secondary" onPress={() => Share.share({ message })} />
+      {visit.status !== 'cancelled' && visit.status !== 'completed' ? (
+        <Button label="Edit visit" variant="secondary" onPress={() => router.push({ pathname: '/visit-edit/[id]', params: { id: visit.id } })} />
+      ) : null}
       {visit.status === 'upcoming' ? <Button label={visit.hasQr ? 'Show attendance QR' : 'Generate attendance QR'} onPress={() => router.push(`/qr/${visit.id}`)} /> : null}
       {visit.status === 'upcoming' ? <Button label="Report client no-show" variant="danger" onPress={() => router.push(`/no-show/${visit.id}`)} /> : null}
       {visit.status !== 'cancelled' && visit.status !== 'completed' ? (

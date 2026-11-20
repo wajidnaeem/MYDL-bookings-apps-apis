@@ -8,9 +8,10 @@ import { useClient } from '@/context/ClientContext';
 
 export default function PolicyScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { appointments, policy } = useClient();
+  const { appointments, policy, acceptPolicy } = useClient();
   const appointment = appointments.find((item) => item.id === id);
   const [accepted, setAccepted] = useState(false);
+  const [error, setError] = useState('');
 
   if (!appointment) {
     return <Screen subtitle="This appointment is no longer available." />;
@@ -33,7 +34,19 @@ export default function PolicyScreen() {
         <View style={[styles.box, accepted && styles.boxOn]} />
         <Text style={styles.checkLabel}>I accept these late, cancellation, and no-show terms.</Text>
       </Pressable>
-      <Button label="Continue to payment" disabled={!accepted} onPress={() => router.push(`/checkout/${appointment.id}`)} />
+      {error ? <Text style={styles.body}>{error}</Text> : null}
+      <Button
+        label="Continue to payment"
+        disabled={!accepted}
+        onPress={async () => {
+          try {
+            await acceptPolicy(appointment.id);
+            router.push(`/checkout/${appointment.id}`);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not save your acceptance.');
+          }
+        }}
+      />
     </Screen>
   );
 }

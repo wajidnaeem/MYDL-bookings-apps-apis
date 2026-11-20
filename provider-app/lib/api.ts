@@ -61,11 +61,13 @@ export const api = {
   dashboard: () => request<Dashboard>('/provider/dashboard'),
   saveSettings: (input: Partial<Business & Policy>) =>
     request<Dashboard>('/provider/settings', { method: 'PATCH', body: JSON.stringify(input) }),
+  connectPayout: () => request<{ url: string }>('/provider/payout-link', { method: 'POST' }),
   createVisit: (input: {
     clientEmail: string;
     service: string;
     date: string;
     time: string;
+    timezone: string;
     duration: string;
     location: string;
     price: string;
@@ -73,12 +75,22 @@ export const api = {
   }) => request<Dashboard & { id: string }>('/provider/appointments', { method: 'POST', body: JSON.stringify(input) }),
   makeQr: (id: string) =>
     request<{ token: string; previewPath: string }>(`/provider/appointments/${id}/qr`, { method: 'POST' }),
+  updateVisit: (id: string, input: {
+    service: string;
+    date: string;
+    time: string;
+    timezone: string;
+    duration: string;
+    location: string;
+    price: string;
+    deposit: string;
+  }) => request<Dashboard>(`/provider/appointments/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
   cancel: (id: string) => request<Dashboard>(`/provider/appointments/${id}/cancel`, { method: 'POST' }),
   noShow: (id: string, note: string) =>
     request<Dashboard & { id: string }>(`/provider/appointments/${id}/no-show`, {
       method: 'POST',
       body: JSON.stringify({ note }),
     }),
-  dispute: (input: { title: string; detail: string; appointmentId?: string }) =>
+  dispute: (input: { title: string; detail: string; evidenceFile?: { name: string; data: string }; appointmentId?: string }) =>
     request<Dashboard & { id: string }>('/disputes', { method: 'POST', body: JSON.stringify(input) }),
 };
