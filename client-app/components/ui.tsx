@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
+  ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -7,38 +9,78 @@ import {
   TextInput,
   View,
   type PressableProps,
+  type StyleProp,
   type TextInputProps,
+  type ViewStyle,
 } from 'react-native';
 
-import { theme } from '@/constants/theme';
-import type { AppointmentStatus } from '@/data/sample';
+import { Icon, type IconName } from '@/components/Icon';
+import { fonts, radius, theme } from '@/constants/theme';
+
+export const shadow: ViewStyle = Platform.OS === 'web'
+  ? ({ boxShadow: '0 1px 2px rgba(20,24,29,0.04), 0 10px 28px -18px rgba(20,24,29,0.28)' } as ViewStyle)
+  : { shadowColor: '#14181D', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.07, shadowRadius: 16, elevation: 2 };
+
+/* ---------- Layout ---------- */
 
 export function Screen({
   title,
   subtitle,
+  eyebrow,
+  right,
   children,
 }: {
   title?: string;
   subtitle?: string;
+  eyebrow?: string;
+  right?: ReactNode;
   children?: ReactNode;
 }) {
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled">
-      {title ? <Text style={styles.title}>{title}</Text> : null}
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      {title || eyebrow || right ? (
+        <View style={styles.headRow}>
+          <View style={{ flex: 1 }}>
+            {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+            {title ? <Text style={styles.title}>{title}</Text> : null}
+          </View>
+          {right}
+        </View>
+      ) : null}
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {children}
     </ScrollView>
   );
 }
 
+export function SectionHeader({ title, count, action }: { title: string; count?: number; action?: { label: string; onPress: () => void } }) {
+  return (
+    <View style={styles.sectionRow}>
+      <Text style={styles.section}>
+        {title}
+        {count != null ? <Text style={styles.sectionCount}>  {count}</Text> : null}
+      </Text>
+      {action ? (
+        <Pressable onPress={action.onPress} hitSlop={8} accessibilityRole="button">
+          <Text style={styles.sectionAction}>{action.label}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+/* ---------- Controls ---------- */
+
+type Variant = 'primary' | 'secondary' | 'danger' | 'gold' | 'ghost';
+
 export function Button({
   label,
   variant = 'primary',
+  icon,
+  loading,
   ...rest
-}: PressableProps & { label: string; variant?: 'primary' | 'secondary' | 'danger' }) {
+}: PressableProps & { label: string; variant?: Variant; icon?: IconName; loading?: boolean }) {
+  const fg = variant === 'primary' ? theme.onInk : variant === 'gold' ? theme.ink : variant === 'danger' ? theme.danger : theme.text;
   return (
     <Pressable
       accessibilityRole="button"
@@ -47,107 +89,282 @@ export function Button({
         variant === 'primary' && styles.primary,
         variant === 'secondary' && styles.secondary,
         variant === 'danger' && styles.danger,
+        variant === 'gold' && styles.gold,
+        variant === 'ghost' && styles.ghost,
         pressed && styles.pressed,
         rest.disabled && styles.disabled,
       ]}
       {...rest}>
-      <Text
-        style={[
-          styles.buttonLabel,
-          variant === 'secondary' && styles.secondaryLabel,
-          variant === 'danger' && styles.dangerLabel,
-        ]}>
-        {label}
-      </Text>
+      {loading ? <ActivityIndicator color={fg} size="small" /> : icon ? <Icon name={icon} size={18} color={fg} strokeWidth={2} /> : null}
+      <Text style={[styles.buttonLabel, { color: fg }]}>{label}</Text>
     </Pressable>
   );
 }
 
-export function TextField({ label, ...props }: TextInputProps & { label: string }) {
+export function TextField({ label, hint, ...props }: TextInputProps & { label: string; hint?: string }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        placeholderTextColor={theme.muted}
-        style={[styles.input, props.multiline && styles.multiline]}
+        placeholderTextColor={theme.faint}
         {...props}
+        onFocus={(e) => { setFocused(true); props.onFocus?.(e); }}
+        onBlur={(e) => { setFocused(false); props.onBlur?.(e); }}
+        style={[styles.input, props.multiline && styles.multiline, focused && styles.inputFocused, props.style]}
       />
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
-  return <View style={styles.card}>{children}</View>;
+export function FieldRow({ children }: { children: ReactNode }) {
+  return <View style={styles.fieldRow}>{children}</View>;
 }
 
-export function StatusPill({ status }: { status: AppointmentStatus | string }) {
+export function FieldCol({ children }: { children: ReactNode }) {
+  return <View style={{ flex: 1 }}>{children}</View>;
+}
+
+export function Chips<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { id: T; label: string; count?: number }[];
+  value: T;
+  onChange: (id: T) => void;
+}) {
   return (
-    <View style={styles.pill}>
-      <Text style={styles.pillText}>{status}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={{ flexGrow: 0 }}>
+      {options.map((item) => {
+        const on = item.id === value;
+        return (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            onPress={() => onChange(item.id)}
+            style={[styles.chip, on && styles.chipOn]}>
+            <Text style={[styles.chipText, on && styles.chipTextOn]}>{item.label}</Text>
+            {item.count != null ? <Text style={[styles.chipCount, on && styles.chipCountOn]}>{item.count}</Text> : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+/* ---------- Content ---------- */
+
+export function Card({ children, style, dark }: { children: ReactNode; style?: StyleProp<ViewStyle>; dark?: boolean }) {
+  return <View style={[styles.card, dark && styles.cardDark, style]}>{children}</View>;
+}
+
+export function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.formSection}>
+      <Text style={styles.formTitle}>{title}</Text>
+      <View style={styles.formBody}>{children}</View>
     </View>
   );
 }
 
-export function Row({ label, value }: { label: string; value: string }) {
+type Tone = 'pending' | 'info' | 'success' | 'gold' | 'danger' | 'neutral';
+
+export function toneFor(status: string): Tone {
+  const value = status.toLowerCase();
+  if (value.includes('no-show') || value.includes('fail')) return 'danger';
+  if (value.includes('pending') || value.includes('invitation') || value.includes('review') || value.includes('due')) return 'pending';
+  if (value.includes('held') || value.includes('upcoming')) return 'info';
+  if (value.includes('kept')) return 'gold';
+  if (value.includes('complete') || value.includes('release') || value.includes('charg') || value.includes('paid') || value.includes('confirm')) return 'success';
+  return 'neutral';
+}
+
+const toneColors: Record<Tone, { bg: string; fg: string }> = {
+  pending: { bg: theme.warningSoft, fg: theme.warning },
+  info: { bg: theme.infoSoft, fg: theme.info },
+  success: { bg: theme.successSoft, fg: theme.success },
+  gold: { bg: theme.goldSoft, fg: theme.accent },
+  danger: { bg: theme.dangerSoft, fg: theme.danger },
+  neutral: { bg: theme.neutralSoft, fg: '#4D535B' },
+};
+
+export function StatusPill({ status, dark }: { status: string; dark?: boolean }) {
+  const tone = toneColors[toneFor(status)];
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
   return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
+    <View style={[styles.pill, { backgroundColor: dark ? 'rgba(245,240,230,0.10)' : tone.bg }]}>
+      <View style={[styles.pillDot, { backgroundColor: dark ? theme.goldLight : tone.fg }]} />
+      <Text style={[styles.pillText, { color: dark ? theme.goldLight : tone.fg }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function Row({ label, value, icon, last }: { label: string; value: string; icon?: IconName; last?: boolean }) {
+  return (
+    <View style={[styles.row, last && { borderBottomWidth: 0 }]}>
+      <View style={styles.rowLeft}>
+        {icon ? <Icon name={icon} size={16} color={theme.faint} /> : null}
+        <Text style={styles.rowLabel}>{label}</Text>
+      </View>
       <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
 }
 
+export function Stat({ label, value, note, dark }: { label: string; value: string; note?: string; dark?: boolean }) {
+  return (
+    <View style={[styles.stat, dark && styles.statDark]}>
+      <Text style={[styles.statLabel, dark && { color: theme.onInkMuted }]}>{label}</Text>
+      <Text style={[styles.statValue, dark && { color: theme.onInk }]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      {note ? <Text style={[styles.statNote, dark && { color: theme.onInkMuted }]}>{note}</Text> : null}
+    </View>
+  );
+}
+
+export function Avatar({ name, size = 44, dark }: { name: string; size?: number; dark?: boolean }) {
+  const letters = String(name || '?').trim().split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w)).slice(0, 2).map((p) => p.charAt(0)).join('').toUpperCase() || '?';
+  return (
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }, dark && styles.avatarDark]}>
+      <Text style={[styles.avatarText, { fontSize: size * 0.36 }, dark && { color: theme.goldLight }]}>{letters}</Text>
+    </View>
+  );
+}
+
+export function ListItem({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  danger,
+  last,
+}: {
+  icon: IconName;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.listItem, last && { borderBottomWidth: 0 }, pressed && { backgroundColor: theme.cardMuted }]}>
+      <View style={[styles.listIcon, danger && { backgroundColor: theme.dangerSoft }]}>
+        <Icon name={icon} size={18} color={danger ? theme.danger : theme.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.listTitle, danger && { color: theme.danger }]}>{title}</Text>
+        {subtitle ? <Text style={styles.listSub} numberOfLines={1}>{subtitle}</Text> : null}
+      </View>
+      {!danger ? <Icon name="chevron" size={18} color={theme.faint} /> : null}
+    </Pressable>
+  );
+}
+
+export function EmptyState({ icon = 'inbox', title, body, action }: { icon?: IconName; title: string; body?: string; action?: ReactNode }) {
+  return (
+    <View style={styles.empty}>
+      <View style={styles.emptyIcon}><Icon name={icon} size={22} color={theme.accent} /></View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
+      {action}
+    </View>
+  );
+}
+
+export function Notice({ text, tone = 'danger', icon }: { text: string; tone?: 'danger' | 'success' | 'warning' | 'info'; icon?: IconName }) {
+  const map = {
+    danger: { bg: theme.dangerSoft, fg: theme.danger, icon: 'alert' as IconName },
+    success: { bg: theme.successSoft, fg: theme.success, icon: 'check' as IconName },
+    warning: { bg: theme.warningSoft, fg: theme.warning, icon: 'alert' as IconName },
+    info: { bg: theme.goldSoft, fg: theme.accent, icon: 'shield' as IconName },
+  }[tone];
+  return (
+    <View style={[styles.notice, { backgroundColor: map.bg }]} accessibilityRole={tone === 'danger' ? 'alert' : undefined}>
+      <Icon name={icon || map.icon} size={18} color={map.fg} />
+      <Text style={[styles.noticeText, { color: tone === 'info' ? theme.text : map.fg }]}>{text}</Text>
+    </View>
+  );
+}
+
+/* ---------- Styles ---------- */
+
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: 20, gap: 12, paddingBottom: 40, width: '100%' },
-  title: { fontSize: 28, fontWeight: '700', color: theme.text },
-  subtitle: { fontSize: 16, lineHeight: 22, color: theme.muted, marginBottom: 8 },
-  button: {
-    minHeight: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    alignSelf: 'stretch',
-  },
-  primary: { backgroundColor: theme.accent },
+  content: { padding: 20, gap: 14, paddingBottom: 48, width: '100%' },
+  headRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 4 },
+  eyebrow: { color: theme.accent, fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 },
+  title: { fontFamily: fonts.serif, fontSize: 34, lineHeight: 38, fontWeight: '700', color: theme.text, letterSpacing: -0.3 },
+  subtitle: { fontSize: 15, lineHeight: 22, color: theme.muted, marginTop: -4, marginBottom: 2 },
+
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  section: { color: theme.text, fontSize: 17, fontWeight: '700' },
+  sectionCount: { color: theme.faint, fontWeight: '600', fontSize: 15 },
+  sectionAction: { color: theme.accent, fontSize: 14, fontWeight: '700' },
+
+  button: { minHeight: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 18, alignSelf: 'stretch' },
+  primary: { backgroundColor: theme.ink },
+  gold: { backgroundColor: theme.gold },
   secondary: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
-  danger: { backgroundColor: '#F8E8E8' },
-  pressed: { opacity: 0.85 },
+  danger: { backgroundColor: theme.dangerSoft },
+  ghost: { backgroundColor: 'transparent' },
+  pressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.5 },
-  buttonLabel: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  secondaryLabel: { color: theme.text },
-  dangerLabel: { color: theme.danger },
-  field: { gap: 6 },
-  fieldLabel: { color: theme.text, fontSize: 14, fontWeight: '600' },
-  input: {
-    backgroundColor: theme.card,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: theme.text,
-  },
-  multiline: { minHeight: 120, textAlignVertical: 'top' },
-  card: {
-    backgroundColor: theme.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.border,
-    padding: 16,
-    gap: 8,
-  },
-  pill: {
-    alignSelf: 'flex-start',
-    backgroundColor: theme.accentSoft,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  pillText: { color: theme.accent, fontSize: 12, fontWeight: '700', textTransform: 'capitalize' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  buttonLabel: { fontSize: 16, fontWeight: '700' },
+
+  field: { gap: 7 },
+  fieldLabel: { color: theme.muted, fontSize: 13, fontWeight: '600' },
+  input: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: theme.text },
+  inputFocused: { borderColor: theme.gold, ...(Platform.OS === 'web' ? ({ boxShadow: '0 0 0 4px rgba(201,168,106,0.18)', outlineStyle: 'none' } as object) : {}) },
+  multiline: { minHeight: 112, textAlignVertical: 'top' },
+  hint: { color: theme.faint, fontSize: 12.5, lineHeight: 17 },
+  fieldRow: { flexDirection: 'row', gap: 12 },
+
+  chips: { gap: 8, paddingRight: 4 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, paddingHorizontal: 14, height: 38 },
+  chipOn: { backgroundColor: theme.ink, borderColor: theme.ink },
+  chipText: { color: theme.text, fontSize: 14, fontWeight: '600' },
+  chipTextOn: { color: theme.onInk },
+  chipCount: { color: theme.faint, fontSize: 12, fontWeight: '700' },
+  chipCountOn: { color: theme.goldLight },
+
+  card: { backgroundColor: theme.card, borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, padding: 18, gap: 10, ...shadow },
+  cardDark: { backgroundColor: theme.ink, borderColor: theme.ink },
+
+  formSection: { gap: 10 },
+  formTitle: { color: theme.faint, fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', marginTop: 6 },
+  formBody: { gap: 14 },
+
+  pill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  pillDot: { width: 6, height: 6, borderRadius: 3 },
+  pillText: { fontSize: 12, fontWeight: '700' },
+
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowLabel: { color: theme.muted, fontSize: 14 },
   rowValue: { color: theme.text, fontSize: 14, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
+
+  stat: { flex: 1, backgroundColor: theme.card, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, padding: 14, gap: 4 },
+  statDark: { backgroundColor: 'rgba(245,240,230,0.06)', borderColor: 'rgba(245,240,230,0.10)' },
+  statLabel: { color: theme.muted, fontSize: 12, fontWeight: '600' },
+  statValue: { fontFamily: fonts.serif, color: theme.text, fontSize: 26, fontWeight: '700' },
+  statNote: { color: theme.faint, fontSize: 11.5 },
+
+  avatar: { backgroundColor: theme.goldSoft, alignItems: 'center', justifyContent: 'center' },
+  avatarDark: { backgroundColor: 'rgba(201,168,106,0.16)' },
+  avatarText: { color: theme.accent, fontWeight: '800' },
+
+  listItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
+  listIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.goldSoft, alignItems: 'center', justifyContent: 'center' },
+  listTitle: { color: theme.text, fontSize: 15.5, fontWeight: '600' },
+  listSub: { color: theme.muted, fontSize: 13, marginTop: 2 },
+
+  empty: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20, gap: 6, backgroundColor: theme.card, borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, borderStyle: 'dashed' },
+  emptyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: theme.goldSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  emptyTitle: { color: theme.text, fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  emptyBody: { color: theme.muted, fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 6 },
+
+  notice: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', borderRadius: radius.md, padding: 14 },
+  noticeText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '500' },
 });

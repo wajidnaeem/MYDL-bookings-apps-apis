@@ -1,33 +1,45 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
 
-import { Button, Screen, TextField } from '@/components/ui';
-import { theme } from '@/constants/theme';
+import { VisitForm, type VisitFields } from '@/components/VisitForm';
+import { Button, EmptyState, Notice, Screen } from '@/components/ui';
 import { useProvider } from '@/context/ProviderContext';
+import { useFillOnce } from '@/lib/format';
 
 export default function EditVisitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { appointments, updateVisit } = useProvider();
   const visit = appointments.find((item) => item.id === id);
-  const [service, setService] = useState(visit?.service || '');
-  const [date, setDate] = useState(visit?.date || '');
-  const [time, setTime] = useState(visit?.time || '');
-  const [timezone, setTimezone] = useState(visit?.timezone || 'UTC');
-  const [duration, setDuration] = useState(visit?.duration || '');
-  const [location, setLocation] = useState(visit?.location || '');
-  const [price, setPrice] = useState(visit?.price || '');
-  const [deposit, setDeposit] = useState(visit?.deposit || '');
+  const [fields, setFields] = useState<VisitFields>({
+    service: visit?.service || '',
+    date: visit?.date || '',
+    time: visit?.time || '',
+    timezone: visit?.timezone || 'UTC',
+    duration: visit?.duration || '',
+    location: visit?.location || '',
+    price: visit?.price || '',
+    deposit: visit?.deposit || '',
+  });
+  useFillOnce(Boolean(visit), () => visit && setFields({
+    service: visit.service, date: visit.date, time: visit.time, timezone: visit.timezone || 'UTC',
+    duration: visit.duration, location: visit.location, price: visit.price, deposit: visit.deposit,
+  }));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (!visit) return <Screen subtitle="This visit is no longer available." />;
+  if (!visit) {
+    return (
+      <Screen>
+        <EmptyState icon="calendar" title="This visit is no longer available." />
+      </Screen>
+    );
+  }
 
   async function save() {
     setBusy(true);
     setError('');
     try {
-      await updateVisit(visit!.id, { service, date, time, timezone, duration, location, price, deposit });
+      await updateVisit(visit!.id, fields);
       router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the visit.');
@@ -38,18 +50,10 @@ export default function EditVisitScreen() {
 
   return (
     <Screen subtitle="The client is notified when the visit changes.">
-      <TextField label="Service" value={service} onChangeText={setService} />
-      <TextField label="Date" value={date} onChangeText={setDate} />
-      <TextField label="Time" value={time} onChangeText={setTime} />
-      <TextField label="Time zone" value={timezone} onChangeText={setTimezone} autoCapitalize="none" />
-      <TextField label="Duration" value={duration} onChangeText={setDuration} />
-      <TextField label="Location" value={location} onChangeText={setLocation} />
-      <TextField label="Price" value={price} onChangeText={setPrice} />
-      <TextField label="Deposit" value={deposit} onChangeText={setDeposit} />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button label={busy ? 'Saving…' : 'Save changes'} disabled={busy} onPress={save} />
+      {visit.depositPaid ? <Notice tone="info" text={`The client has already paid a ${visit.deposit} deposit. Changing the deposit here does not charge or refund them.`} /> : null}
+      <VisitForm value={fields} onChange={setFields} />
+      {error ? <Notice text={error} /> : null}
+      <Button label={busy ? 'Saving…' : 'Save changes'} loading={busy} disabled={busy} onPress={save} />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({ error: { color: theme.danger, fontSize: 14 } });

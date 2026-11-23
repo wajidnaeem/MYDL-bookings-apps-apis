@@ -1,27 +1,42 @@
 import { router } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Card, Row, Screen } from '@/components/ui';
-import { theme } from '@/constants/theme';
+import { Avatar, Card, ListItem, Row, Screen, SectionHeader, shadow } from '@/components/ui';
+import { fonts, radius, theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useClient } from '@/context/ClientContext';
 
 export default function ProfileScreen() {
   const { signOut } = useAuth();
-  const { profile } = useClient();
+  const { profile, disputes, appointments } = useClient();
+  const open = disputes.filter((item) => item.status === 'In review').length;
+  const done = appointments.filter((item) => item.status === 'completed').length;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Profile" subtitle="Your client account.">
-        <Card>
-          <Text style={styles.name}>{profile.name}</Text>
-          <Row label="Email" value={profile.email} />
-          <Row label="Phone" value={profile.phone} />
+      <Screen title="Profile">
+        <View style={styles.hero}>
+          <Avatar name={profile.name} size={60} dark />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={2}>{profile.name}</Text>
+            <Text style={styles.sub}>Your client account · {done} completed visit{done === 1 ? '' : 's'}</Text>
+          </View>
+        </View>
+
+        <Card style={{ gap: 0, paddingVertical: 6 }}>
+          <Row icon="mail" label="Email" value={profile.email} />
+          <Row icon="phone" label="Phone" value={profile.phone} last />
         </Card>
-        <Button label="Edit profile" variant="secondary" onPress={() => router.push('/profile-edit')} />
-        <Button label="Disputes" variant="secondary" onPress={() => router.push('/disputes')} />
-        <Button label="Log out" variant="danger" onPress={signOut} />
+
+        <SectionHeader title="Account" />
+        <View style={styles.menu}>
+          <ListItem icon="edit" title="Edit profile" subtitle="Name, email and phone" onPress={() => router.push('/profile-edit')} />
+          <ListItem icon="scale" title="Disputes" subtitle={open ? `${open} in review` : 'No open disputes'} onPress={() => router.push('/disputes')} last />
+        </View>
+        <View style={[styles.menu, { marginTop: 6 }]}>
+          <ListItem icon="logout" title="Log out" danger onPress={signOut} last />
+        </View>
       </Screen>
     </SafeAreaView>
   );
@@ -29,5 +44,8 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.bg },
-  name: { color: theme.text, fontSize: 20, fontWeight: '700' },
+  hero: { backgroundColor: theme.ink, borderRadius: radius.xl, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  name: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 26, fontWeight: '700' },
+  sub: { color: theme.onInkMuted, fontSize: 13.5, marginTop: 3 },
+  menu: { backgroundColor: theme.card, borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', ...shadow },
 });

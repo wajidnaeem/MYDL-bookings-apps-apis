@@ -1,9 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
 
-import { Button, Screen, TextField } from '@/components/ui';
-import { theme } from '@/constants/theme';
+import { Button, Notice, Screen, TextField } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 
 export default function ForgotPasswordScreen() {
@@ -32,10 +30,8 @@ export default function ForgotPasswordScreen() {
   return (
     <Screen subtitle="We will send a reset code to this email.">
       <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button label={busy ? 'Sending…' : 'Send reset code'} disabled={busy} onPress={submit} />
+      {error ? <Notice text={error} /> : null}
+      <Button label={busy ? 'Sending…' : 'Send reset code'} loading={busy} disabled={busy} onPress={submit} />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({ error: { color: theme.danger, fontSize: 14 } });

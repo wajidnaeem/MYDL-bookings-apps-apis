@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MYDL — Deposit protection for appointments</title>
+  <meta name="description" content="MYDL holds the client's deposit until a QR check-in confirms the visit. Late, no-show and cancellation terms are agreed before anyone pays." />
+  <meta name="theme-color" content="#0D1014" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0D1014;
+      --ink-2: #141920;
+      --ink-3: #1C232C;
+      --line-dark: rgba(245, 240, 230, 0.10);
+      --ivory: #F5F0E6;
+      --ivory-2: #EAE2D2;
+      --paper: #FBF8F2;
+      --gold: #C9A86A;
+      --gold-2: #E2CB98;
+      --gold-ink: #6E5526;
+      --text: #14181D;
+      --muted: #6B717A;
+      --muted-dark: #A3A8B0;
+      --green: #1F8F4E;
+      --radius: 22px;
+      --serif: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+      --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --wrap: 1180px;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body { margin: 0; font-family: var(--sans); color: var(--text); background: var(--paper); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    img, svg { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    .wrap { width: 100%; max-width: var(--wrap); margin: 0 auto; padding: 0 24px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
+    .eyebrow::before { content: ''; width: 28px; height: 1px; background: currentColor; }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -.01em; line-height: 1.05; margin: 0; }
+    h2 { font-size: clamp(36px, 4.6vw, 56px); }
+    .lead { font-size: 18px; color: var(--muted); max-width: 560px; }
+    :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 6px; }
+    .skip { position: absolute; left: -9999px; top: 8px; background: var(--gold); color: var(--ink); padding: 8px 14px; border-radius: 8px; z-index: 100; }
+    .skip:focus { left: 8px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 0 24px; border-radius: 999px; font-weight: 600; font-size: 15px; border: 1px solid transparent; cursor: pointer; transition: transform .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-gold { background: var(--gold); color: var(--ink); }
+    .btn-gold:hover { background: var(--gold-2); }
+    .btn-ghost { border-color: rgba(245, 240, 230, .28); color: var(--ivory); }
+    .btn-ghost:hover { border-color: var(--gold); color: var(--gold-2); }
+    .btn-ink { background: var(--ink); color: var(--ivory); }
+    .btn-ink:hover { background: var(--ink-3); }
+    .btn svg { width: 16px; height: 16px; }
+
+    /* Nav */
+    .nav { position: fixed; inset: 0 0 auto 0; z-index: 50; transition: background .3s ease, border-color .3s ease, backdrop-filter .3s ease; border-bottom: 1px solid transparent; }
+    .nav.scrolled { background: rgba(13, 16, 20, .82); backdrop-filter: saturate(140%) blur(14px); -webkit-backdrop-filter: saturate(140%) blur(14px); border-color: var(--line-dark); }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 76px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--ivory); font-family: var(--serif); font-size: 26px; font-weight: 700; letter-spacing: .06em; }
+    .brand-mark { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--gold); display: grid; place-items: center; color: var(--gold); font-size: 17px; }
+    .nav-links { display: flex; align-items: center; gap: 34px; }
+    .nav-links a { color: var(--muted-dark); font-size: 14px; font-weight: 500; transition: color .2s; }
+    .nav-links a:hover { color: var(--ivory); }
+    .nav-cta { display: flex; gap: 10px; align-items: center; }
+    .nav-cta .btn { min-height: 42px; padding: 0 18px; font-size: 14px; }
+    .menu-btn { display: none; background: none; border: 1px solid var(--line-dark); color: var(--ivory); width: 44px; height: 44px; border-radius: 12px; cursor: pointer; }
+    .menu-btn svg { width: 20px; height: 20px; margin: auto; }
+    .mobile-menu { display: none; }
+
+    /* Hero */
+    .hero { position: relative; background: var(--ink); color: var(--ivory); padding: 150px 0 110px; overflow: hidden; isolation: isolate; }
+    .hero::before { content: ''; position: absolute; inset: -20% -10% auto auto; width: 760px; height: 760px; background: radial-gradient(closest-side, rgba(201, 168, 106, .20), transparent 70%); z-index: -1; }
+    .hero::after { content: ''; position: absolute; inset: 0; background-image: linear-gradient(var(--line-dark) 1px, transparent 1px), linear-gradient(90deg, var(--line-dark) 1px, transparent 1px); background-size: 72px 72px; mask-image: radial-gradient(ellipse at 30% 40%, #000 10%, transparent 70%); -webkit-mask-image: radial-gradient(ellipse at 30% 40%, #000 10%, transparent 70%); opacity: .35; z-index: -2; }
+    .hero-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 64px; align-items: center; }
+    .hero h1 { font-size: clamp(48px, 7vw, 92px); margin: 22px 0 24px; }
+    .hero h1 em { font-style: italic; color: var(--gold); }
+    .hero .lead { color: var(--muted-dark); font-size: 19px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 36px; }
+    .hero-notes { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--line-dark); color: var(--muted-dark); font-size: 14px; }
+    .hero-notes span { display: inline-flex; align-items: center; gap: 8px; }
+    .hero-notes svg { width: 16px; height: 16px; color: var(--gold); }
+
+    /* Phone mockup */
+    .phone-stage { position: relative; display: flex; justify-content: center; padding-bottom: 40px; }
+    .phone { position: relative; width: 320px; border-radius: 46px; padding: 12px; background: linear-gradient(160deg, #2A313B, #0B0E12); box-shadow: 0 50px 100px -30px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06) inset; transform: rotate(-3deg); }
+    .screen { border-radius: 36px; background: var(--ivory); color: var(--text); padding: 22px 18px 20px; min-height: 600px; overflow: hidden; }
+    .notch { width: 96px; height: 24px; background: #0B0E12; border-radius: 0 0 16px 16px; margin: -22px auto 16px; }
+    .s-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
+    .s-title { font-family: var(--serif); font-size: 30px; font-weight: 600; margin: 8px 0 14px; color: var(--ink); }
+    .s-card { background: #fff; border: 1px solid var(--ivory-2); border-radius: 20px; padding: 16px; box-shadow: 0 10px 24px -16px rgba(20, 24, 29, .35); }
+    .s-card + .s-card { margin-top: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 4px 10px; border-radius: 999px; background: #E7F6EE; color: var(--green); }
+    .pill.gold { background: #F6EEDC; color: var(--gold-ink); }
+    .s-row { display: flex; justify-content: space-between; font-size: 13px; margin-top: 8px; }
+    .s-row b { font-weight: 600; }
+    .s-provider { font-weight: 700; font-size: 17px; margin-top: 10px; }
+    .s-muted { color: var(--muted); font-size: 13px; }
+    .s-qr { display: grid; place-items: center; padding: 16px 0 6px; }
+    .s-qr svg { width: 150px; height: 150px; }
+    .s-code { text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: .12em; color: var(--ink); margin-top: 6px; }
+    .s-btn { margin-top: 14px; background: var(--ink); color: var(--ivory); border-radius: 14px; text-align: center; font-weight: 600; font-size: 14px; padding: 13px; }
+    .float-chip { position: absolute; display: flex; align-items: center; gap: 12px; background: rgba(20, 25, 32, .92); border: 1px solid var(--line-dark); color: var(--ivory); border-radius: 18px; padding: 14px 16px; font-size: 13px; box-shadow: 0 20px 40px -20px rgba(0,0,0,.6); backdrop-filter: blur(8px); }
+    .float-chip b { display: block; font-size: 14px; }
+    .float-chip small { color: var(--muted-dark); }
+    .chip-ic { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: rgba(201, 168, 106, .14); color: var(--gold); flex: none; }
+    .chip-ic svg { width: 18px; height: 18px; }
+    .chip-a { left: -6px; bottom: -34px; animation: bob 6s ease-in-out infinite; }
+    .chip-b { right: -14px; top: 34px; animation: bob 7s ease-in-out infinite reverse; }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+    /* Strip */
+    .strip { background: var(--ink-2); color: var(--muted-dark); border-top: 1px solid var(--line-dark); }
+    .strip .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 32px; padding-top: 22px; padding-bottom: 22px; font-size: 14px; }
+    .strip span { display: inline-flex; align-items: center; gap: 10px; }
+    .strip i { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); display: inline-block; }
+
+    /* Sections */
+    section.block { padding: 120px 0; }
+    .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 56px; }
+    .head h2 { margin-top: 16px; max-width: 640px; }
+
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; counter-reset: step; }
+    .step { position: relative; background: #fff; border: 1px solid var(--ivory-2); border-radius: var(--radius); padding: 30px 26px 32px; transition: transform .3s ease, box-shadow .3s ease; }
+    .step:hover { transform: translateY(-4px); box-shadow: 0 24px 50px -30px rgba(20, 24, 29, .35); }
+    .step-num { font-family: var(--serif); font-size: 54px; line-height: 1; color: var(--gold); }
+    .step h3 { font-size: 26px; margin: 18px 0 10px; }
+    .step p { margin: 0; color: var(--muted); font-size: 15px; }
+    .step-who { display: inline-block; margin-top: 18px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-ink); background: #F6EEDC; padding: 5px 10px; border-radius: 999px; }
+
+    .rules { background: var(--ink); color: var(--ivory); position: relative; overflow: hidden; }
+    .rules .lead { color: var(--muted-dark); }
+    .rule-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line-dark); border: 1px solid var(--line-dark); border-radius: 28px; overflow: hidden; }
+    .rule { background: var(--ink); padding: 40px 38px; display: grid; grid-template-columns: 52px 1fr; gap: 22px; transition: background .3s; }
+    .rule:hover { background: var(--ink-2); }
+    .rule-ic { width: 52px; height: 52px; border-radius: 16px; border: 1px solid rgba(201,168,106,.4); display: grid; place-items: center; color: var(--gold); }
+    .rule-ic svg { width: 22px; height: 22px; }
+    .rule h3 { font-size: 28px; margin-bottom: 10px; }
+    .rule p { margin: 0; color: var(--muted-dark); }
+    .rule .note { margin-top: 14px; font-size: 13px; color: var(--gold-2); }
+
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .panel { border-radius: 28px; padding: 46px 42px; position: relative; overflow: hidden; }
+    .panel.light { background: #fff; border: 1px solid var(--ivory-2); }
+    .panel.dark { background: var(--ink); color: var(--ivory); }
+    .panel h3 { font-size: 38px; margin: 16px 0 22px; }
+    .panel ul { list-style: none; padding: 0; margin: 0 0 32px; display: grid; gap: 14px; }
+    .panel li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; }
+    .panel li svg { width: 18px; height: 18px; margin-top: 4px; color: var(--gold); }
+    .panel.light li { color: #3A4048; }
+    .panel.dark li { color: var(--muted-dark); }
+
+    .faq-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 64px; }
+    .faq details { border-bottom: 1px solid var(--ivory-2); }
+    .faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 26px 0; font-family: var(--serif); font-size: 24px; font-weight: 600; }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary .plus { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ivory-2); display: grid; place-items: center; transition: transform .3s ease, background .3s ease; }
+    .faq summary .plus svg { width: 14px; height: 14px; }
+    .faq details[open] summary .plus { transform: rotate(45deg); background: var(--ink); color: var(--ivory); border-color: var(--ink); }
+    .faq details p { margin: -8px 0 26px; color: var(--muted); max-width: 640px; }
+
+    .cta { padding: 0 0 120px; }
+    .cta-box { background: var(--ink); color: var(--ivory); border-radius: 32px; padding: 72px 56px; display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; align-items: center; position: relative; overflow: hidden; }
+    .cta-box::before { content: ''; position: absolute; right: -120px; top: -160px; width: 480px; height: 480px; border-radius: 50%; border: 1px solid rgba(201,168,106,.25); }
+    .cta-box::after { content: ''; position: absolute; right: -40px; top: -80px; width: 320px; height: 320px; border-radius: 50%; border: 1px solid rgba(201,168,106,.18); }
+    .cta-box h2 { font-size: clamp(34px, 4vw, 52px); }
+    .cta-box p { color: var(--muted-dark); margin: 16px 0 0; }
+    .cta-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; position: relative; z-index: 1; }
+
+    footer { border-top: 1px solid var(--ivory-2); padding: 34px 0 44px; color: var(--muted); font-size: 14px; }
+    footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; align-items: center; }
+    footer .brand { color: var(--ink); font-size: 22px; }
+    footer .brand-mark { width: 28px; height: 28px; font-size: 14px; }
+    .foot-links { display: flex; gap: 24px; }
+    .foot-links a:hover { color: var(--ink); }
+
+    /* Reveal */
+    .reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s ease, transform .8s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .reveal { opacity: 1; transform: none; transition: none; }
+      .chip-a, .chip-b { animation: none; }
+      .btn:hover, .step:hover { transform: none; }
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .phone-stage { margin-top: 30px; }
+      .steps { grid-template-columns: repeat(2, 1fr); }
+      .faq-grid { grid-template-columns: 1fr; gap: 24px; }
+      .cta-box { grid-template-columns: 1fr; }
+      .cta-actions { justify-content: flex-start; }
+    }
+    @media (max-width: 820px) {
+      .nav-links, .nav-cta { display: none; }
+      .menu-btn { display: grid; }
+      .mobile-menu { position: fixed; inset: 76px 0 auto 0; background: var(--ink); border-bottom: 1px solid var(--line-dark); padding: 12px 24px 24px; z-index: 49; }
+      .mobile-menu.open { display: grid; gap: 4px; }
+      .mobile-menu a:not(.btn) { color: var(--ivory); padding: 14px 0; border-bottom: 1px solid var(--line-dark); font-weight: 500; }
+      .mobile-menu .btn { margin-top: 14px; }
+      .rule-grid, .split { grid-template-columns: 1fr; }
+      .rule { padding: 30px 24px; grid-template-columns: 44px 1fr; gap: 16px; }
+      .rule-ic { width: 44px; height: 44px; }
+      .panel { padding: 34px 26px; }
+    }
+    @media (max-width: 560px) {
+      .hero { padding: 120px 0 80px; }
+      .hero-actions .btn { flex: 1 1 100%; }
+      .steps { grid-template-columns: 1fr; }
+      section.block { padding: 84px 0; }
+      .phone { width: 290px; }
+      .chip-a { left: -4px; }
+      .chip-b { display: none; }
+      .cta-box { padding: 48px 26px; }
+      .cta-actions .btn { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav" id="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top" aria-label="MYDL home"><span class="brand-mark" aria-hidden="true">M</span>MYDL</a>
+      <nav class="nav-links" aria-label="Main">
+        <a href="#how">How it works</a>
+        <a href="#rules">Protection</a>
+        <a href="#who">Clients &amp; providers</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="btn btn-ghost" href="{{PROVIDER_APP_URL}}">Provider sign in</a>
+        <a class="btn btn-gold" href="{{CLIENT_APP_URL}}">Client sign in</a>
+      </div>
+      <button class="menu-btn" id="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="#how">How it works</a>
+    <a href="#rules">Protection</a>
+    <a href="#who">Clients &amp; providers</a>
+    <a href="#faq">FAQ</a>
+    <a class="btn btn-gold" href="{{CLIENT_APP_URL}}">Client sign in</a>
+    <a class="btn btn-ghost" href="{{PROVIDER_APP_URL}}">Provider sign in</a>
+  </div>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="eyebrow">Deposit protection for appointments</span>
+          <h1>Every appointment, <em>kept.</em></h1>
+          <p class="lead">MYDL holds the client's deposit until a QR check-in confirms you both showed up. Late, no-show and cancellation terms are agreed before anyone pays.</p>
+          <div class="hero-actions">
+            <a class="btn btn-gold" href="{{CLIENT_APP_URL}}">
+              Open the client app
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+            <a class="btn btn-ghost" href="{{PROVIDER_APP_URL}}">I'm a provider</a>
+          </div>
+          <div class="hero-notes">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Card payments by Stripe</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg>Terms accepted before paying</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>QR check-in on arrival</span>
+          </div>
+        </div>
+
+        <div class="phone-stage" aria-hidden="true">
+          <div class="phone">
+            <div class="screen">
+              <div class="notch"></div>
+              <div class="s-top"><span>Upcoming visit · Fri, 21 Nov</span></div>
+              <div class="s-title">Check in</div>
+              <div class="s-card">
+                <span class="pill">Upcoming</span>
+                <div class="s-provider">Harbor &amp; Co.</div>
+                <div class="s-muted">Follow-up visit · 10:00 AM · 30 min</div>
+                <div class="s-row"><span class="s-muted">Deposit</span><b>$20.00</b></div>
+                <div class="s-row"><span class="s-muted">Status</span><span class="pill gold">Held</span></div>
+              </div>
+              <div class="s-card">
+                <div class="s-muted" style="text-align:center">Scan the provider's code</div>
+                <div class="s-qr" id="qr"></div>
+                <div class="s-code">MYDL-7F3A2C1B</div>
+                <div class="s-btn">Check code</div>
+              </div>
+            </div>
+          </div>
+          <div class="float-chip chip-a">
+            <span class="chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+            <span><b>Attendance confirmed</b><small>Deposit released to provider</small></span>
+          </div>
+          <div class="float-chip chip-b">
+            <span class="chip-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+            <span><b>Code expires in 10 min</b><small>Refresh any time</small></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="strip">
+      <div class="wrap">
+        <span><i></i>Deposits held until the visit is settled</span>
+        <span><i></i>Policy acceptance recorded</span>
+        <span><i></i>Disputes reviewed by an administrator</span>
+        <span><i></i>Every payment and decision logged</span>
+      </div>
+    </div>
+
+    <section class="block" id="how">
+      <div class="wrap">
+        <div class="head reveal">
+          <div>
+            <span class="eyebrow">How it works</span>
+            <h2>From invitation to payout, in four steps.</h2>
+          </div>
+          <p class="lead">Both sides see the same visit, the same terms and the same deposit status at every step.</p>
+        </div>
+        <div class="steps">
+          <article class="step reveal">
+            <div class="step-num">01</div>
+            <h3>Invite</h3>
+            <p>The provider sets the date, time, time zone, location, price and deposit, then sends the invitation in the app or by link.</p>
+            <span class="step-who">Provider</span>
+          </article>
+          <article class="step reveal">
+            <div class="step-num">02</div>
+            <h3>Accept &amp; pay</h3>
+            <p>The client reads the late, no-show and cancellation terms, accepts them, and pays the deposit by card.</p>
+            <span class="step-who">Client</span>
+          </article>
+          <article class="step reveal">
+            <div class="step-num">03</div>
+            <h3>Check in</h3>
+            <p>On arrival the provider shows a time-limited QR code. The client scans it and attendance is confirmed for both.</p>
+            <span class="step-who">Both</span>
+          </article>
+          <article class="step reveal">
+            <div class="step-num">04</div>
+            <h3>Settle</h3>
+            <p>The held deposit is released to the provider's payout account, or refunded or kept under the agreed rules.</p>
+            <span class="step-who">MYDL</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block rules" id="rules">
+      <div class="wrap">
+        <div class="head reveal">
+          <div>
+            <span class="eyebrow">Protection rules</span>
+            <h2>Clear rules, agreed before anyone pays.</h2>
+          </div>
+          <p class="lead">Each provider sets their own terms once. They apply to every new visit and the client sees them before checkout.</p>
+        </div>
+        <div class="rule-grid reveal">
+          <div class="rule">
+            <span class="rule-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg></span>
+            <div>
+              <h3>Late arrival</h3>
+              <p>The provider chooses how many minutes after the start time a client counts as late, and the late fee that applies.</p>
+              <div class="note">The fee can be charged to the card used for the deposit.</div>
+            </div>
+          </div>
+          <div class="rule">
+            <span class="rule-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6M4 4l16 16"/></svg></span>
+            <div>
+              <h3>No-show</h3>
+              <p>If the client does not attend, the provider can file a no-show claim and keep the deposit under the accepted policy.</p>
+              <div class="note">Clients can report a provider who did not attend.</div>
+            </div>
+          </div>
+          <div class="rule">
+            <span class="rule-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M10 14l4 4M14 14l-4 4"/></svg></span>
+            <div>
+              <h3>Cancellation</h3>
+              <p>Cancel at least 24 hours before the visit and the deposit is refunded. Inside 24 hours, the provider keeps it.</p>
+              <div class="note">If the provider cancels, the client is always refunded.</div>
+            </div>
+          </div>
+          <div class="rule">
+            <span class="rule-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 7h14M5 7l-3 7a4 4 0 0 0 6 0zM19 7l-3 7a4 4 0 0 0 6 0z"/></svg></span>
+            <div>
+              <h3>Disputes</h3>
+              <p>Either side can raise a dispute and attach evidence. An administrator reviews the visit, payments and attendance, then decides.</p>
+              <div class="note">You get an alert when the decision is made.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="who">
+      <div class="wrap">
+        <div class="head reveal">
+          <div>
+            <span class="eyebrow">Two apps, one visit</span>
+            <h2>Built for both sides of the appointment.</h2>
+          </div>
+        </div>
+        <div class="split">
+          <div class="panel light reveal">
+            <span class="eyebrow">For clients</span>
+            <h3>Pay with confidence.</h3>
+            <ul>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>See every term before you pay, and keep a record of what you accepted.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Track your deposit: held, released, refunded or kept.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Cancel in time for a full refund, right from the app.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Report a provider no-show or open a dispute with evidence.</li>
+            </ul>
+            <a class="btn btn-ink" href="{{CLIENT_APP_URL}}">Open the client app</a>
+          </div>
+          <div class="panel dark reveal">
+            <span class="eyebrow">For providers</span>
+            <h3>Protect your time.</h3>
+            <ul>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Create a visit and invite the client in under a minute.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Set your late, no-show and cancellation rules once.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Generate a QR check-in code when the client arrives.</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Connect a bank account through Stripe to receive released deposits.</li>
+            </ul>
+            <a class="btn btn-gold" href="{{PROVIDER_APP_URL}}">Open the provider app</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="faq" style="padding-top:0">
+      <div class="wrap faq-grid">
+        <div class="reveal">
+          <span class="eyebrow">Questions</span>
+          <h2 style="margin-top:16px">Good to know.</h2>
+        </div>
+        <div class="faq reveal">
+          <details>
+            <summary>Where is my deposit while I wait?<span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+            <p>Your card payment is processed by Stripe and the deposit is held until the visit is completed, cancelled or decided in a dispute. You can see its status in Payments at any time.</p>
+          </details>
+          <details>
+            <summary>What if the QR code doesn't work?<span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+            <p>Each code expires 10 minutes after the provider creates it. Ask the provider to refresh it, or type the code into the app instead of scanning.</p>
+          </details>
+          <details>
+            <summary>Can I get my deposit back if I cancel?<span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+            <p>Yes, if you cancel at least 24 hours before the visit. Inside 24 hours the provider keeps the deposit. The app tells you which applies before you confirm.</p>
+          </details>
+          <details>
+            <summary>What if the provider doesn't show up?<span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+            <p>Report it from the visit in the client app. It opens a dispute, and an administrator reviews it and decides on a refund.</p>
+          </details>
+          <details>
+            <summary>Do I need an account?<span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></summary>
+            <p>Yes. Providers invite clients by the email on their MYDL account, so create your account and verify your email first.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="wrap">
+        <div class="cta-box reveal">
+          <div>
+            <span class="eyebrow">Get started</span>
+            <h2 style="margin-top:16px">Fewer no-shows. Fairer refunds.</h2>
+            <p>Sign in to the app that fits you. It takes a minute to set up.</p>
+          </div>
+          <div class="cta-actions">
+            <a class="btn btn-gold" href="{{CLIENT_APP_URL}}">Client app</a>
+            <a class="btn btn-ghost" href="{{PROVIDER_APP_URL}}">Provider app</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">M</span>MYDL</a>
+      <div class="foot-links">
+        <a href="#how">How it works</a>
+        <a href="#faq">FAQ</a>
+        <a href="/admin">Admin</a>
+      </div>
+      <span>© <span id="year"></span> MYDL</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var nav = document.getElementById('nav');
+      var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 12); };
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      var btn = document.getElementById('menu-btn');
+      var menu = document.getElementById('mobile-menu');
+      btn.addEventListener('click', function () {
+        var open = menu.classList.toggle('open');
+        btn.setAttribute('aria-expanded', String(open));
+        nav.classList.add('scrolled');
+      });
+      menu.querySelectorAll('a').forEach(function (link) {
+        link.addEventListener('click', function () { menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); });
+      });
+
+      document.getElementById('year').textContent = new Date().getFullYear();
+
+      // Decorative QR-style pattern for the phone mockup.
+      var n = 25, cell = 6, seed = 7, svg = '';
+      function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+      function finder(x, y) {
+        return '<rect x="' + x * cell + '" y="' + y * cell + '" width="' + 7 * cell + '" height="' + 7 * cell + '" rx="6" fill="#0D1014"/>' +
+          '<rect x="' + (x + 1) * cell + '" y="' + (y + 1) * cell + '" width="' + 5 * cell + '" height="' + 5 * cell + '" rx="4" fill="#fff"/>' +
+          '<rect x="' + (x + 2) * cell + '" y="' + (y + 2) * cell + '" width="' + 3 * cell + '" height="' + 3 * cell + '" rx="3" fill="#0D1014"/>';
+      }
+      function inFinder(x, y) { return (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9); }
+      for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+        if (!inFinder(x, y) && rnd() > .52) svg += '<rect x="' + x * cell + '" y="' + y * cell + '" width="' + (cell - 1) + '" height="' + (cell - 1) + '" rx="1.5" fill="#0D1014"/>';
+      }
+      svg += finder(0, 0) + finder(n - 7, 0) + finder(0, n - 7);
+      document.getElementById('qr').innerHTML = '<svg viewBox="0 0 ' + n * cell + ' ' + n * cell + '" xmlns="http://www.w3.org/2000/svg">' + svg + '</svg>';
+
+      var items = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) { items.forEach(function (el) { el.classList.add('in'); }); return; }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) { entry.target.classList.add('in'); io.unobserve(entry.target); }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      items.forEach(function (el, i) { el.style.transitionDelay = (i % 4) * 70 + 'ms'; io.observe(el); });
+    })();
+  </script>
+</body>
+</html>

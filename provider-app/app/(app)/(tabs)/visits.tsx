@@ -1,15 +1,19 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/Icon';
 import { VisitCard } from '@/components/VisitCard';
-import { Screen } from '@/components/ui';
-import { theme } from '@/constants/theme';
+import { Chips, EmptyState, Screen } from '@/components/ui';
+import { radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
+import { byStart } from '@/lib/format';
 import type { VisitStatus } from '@/lib/types';
 
-const filters: { id: 'all' | VisitStatus; label: string }[] = [
+type Filter = 'all' | VisitStatus;
+
+const filters: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'pending', label: 'Invitations' },
   { id: 'upcoming', label: 'Upcoming' },
@@ -19,19 +23,24 @@ const filters: { id: 'all' | VisitStatus; label: string }[] = [
 
 export default function VisitsScreen() {
   const { appointments } = useProvider();
-  const [filter, setFilter] = useState<(typeof filters)[number]['id']>('all');
-  const visible = appointments.filter((item) => filter === 'all' || item.status === filter);
+  const [filter, setFilter] = useState<Filter>('all');
+  const visible = appointments.filter((item) => filter === 'all' || item.status === filter).sort(byStart);
+  const count = (id: Filter) => (id === 'all' ? appointments.length : appointments.filter((item) => item.status === id).length);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Visits" subtitle="Pending, upcoming, completed, and cancelled.">
-        <View style={styles.filters}>
-          {filters.map((item) => (
-            <Pressable key={item.id} onPress={() => setFilter(item.id)} style={[styles.chip, filter === item.id && styles.chipOn]}>
-              <Text style={[styles.chipText, filter === item.id && styles.chipTextOn]}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
+      <Screen
+        title="Visits"
+        subtitle="Pending, upcoming, completed, and cancelled."
+        right={
+          <Pressable accessibilityRole="button" accessibilityLabel="New visit" onPress={() => router.push('/visit/new')} style={styles.add}>
+            <Icon name="plus" size={22} color={theme.onInk} strokeWidth={2.2} />
+          </Pressable>
+        }>
+        <Chips options={filters.map((item) => ({ ...item, count: count(item.id) }))} value={filter} onChange={setFilter} />
+        {visible.length === 0 ? (
+          <EmptyState icon="calendar" title="Nothing in this list." body={filter === 'all' ? 'Create a visit to invite your first client.' : undefined} />
+        ) : null}
         {visible.map((item) => (
           <VisitCard key={item.id} visit={item} onPress={() => router.push(`/visit/${item.id}`)} />
         ))}
@@ -42,9 +51,5 @@ export default function VisitsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.bg },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderRadius: 999, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, paddingHorizontal: 12, paddingVertical: 8 },
-  chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
-  chipText: { color: theme.text, fontSize: 13, fontWeight: '600' },
-  chipTextOn: { color: '#FFFFFF' },
+  add: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: theme.ink, alignItems: 'center', justifyContent: 'center' },
 });

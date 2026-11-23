@@ -653,6 +653,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+      const page = fs.readFileSync(path.join(root, '..', 'public', 'index.html'), 'utf8')
+        .replaceAll('{{CLIENT_APP_URL}}', appUrl('CLIENT_APP_URL', 'http://localhost:8081'))
+        .replaceAll('{{PROVIDER_APP_URL}}', appUrl('PROVIDER_APP_URL', 'http://localhost:8082'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(page);
+      return;
+    }
+
     if (req.method === 'GET' && url.pathname === '/admin') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(fs.readFileSync(path.join(root, '..', 'public', 'admin.html')));

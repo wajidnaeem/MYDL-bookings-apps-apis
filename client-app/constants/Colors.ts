@@ -1,18 +1,11 @@
-const tint = '#0C6B63';
+const tint = '#8A6A2F';
 
-export default {
-  light: {
-    text: '#13242B',
-    background: '#F3F6F5',
-    tint,
-    tabIconDefault: '#8AA09C',
-    tabIconSelected: tint,
-  },
-  dark: {
-    text: '#13242B',
-    background: '#F3F6F5',
-    tint,
-    tabIconDefault: '#8AA09C',
-    tabIconSelected: tint,
-  },
+const palette = {
+  text: '#14181D',
+  background: '#F6F3EC',
+  tint,
+  tabIconDefault: '#9AA0A8',
+  tabIconSelected: '#0D1014',
 };
+
+export default { light: palette, dark: palette };

@@ -1,10 +1,11 @@
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Screen, TextField } from '@/components/ui';
-import { theme } from '@/constants/theme';
+import { Icon } from '@/components/Icon';
+import { Button, Notice, TextField } from '@/components/ui';
+import { fonts, radius, theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen() {
@@ -29,25 +30,65 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="MYDL" subtitle="Sign in to review invitations, pay deposits, and confirm attendance.">
-        <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextField label="Password" value={password} onChangeText={setPassword} secureTextEntry />
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button label={busy ? 'Signing in…' : 'Sign in'} disabled={busy} onPress={submit} />
-        <Pressable onPress={() => router.push('/forgot-password')}>
-          <Text style={styles.link}>Forgot password</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/register')}>
-          <Text style={styles.link}>Create an account</Text>
-        </Pressable>
-      </Screen>
-    </SafeAreaView>
+    <View style={styles.root}>
+      <SafeAreaView edges={['top']} style={styles.top}>
+        <View style={styles.ring} />
+        <View style={styles.ring2} />
+        <View style={styles.brand}>
+          <View style={styles.mark}><Text style={styles.markText}>M</Text></View>
+          <Text style={styles.brandText}>MYDL</Text>
+        </View>
+        <Text style={styles.heroTitle}>Book with{'\n'}confidence.</Text>
+        <Text style={styles.heroSub}>Sign in to review invitations, pay deposits, and confirm attendance.</Text>
+      </SafeAreaView>
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={styles.sheet} contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.title}>Sign in</Text>
+          <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+          <TextField label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" onSubmitEditing={submit} />
+          <Pressable onPress={() => router.push('/forgot-password')} style={styles.forgot} hitSlop={8}>
+            <Text style={styles.link}>Forgot password</Text>
+          </Pressable>
+          {error ? <Notice text={error} /> : null}
+          <Button label={busy ? 'Signing in…' : 'Sign in'} loading={busy} disabled={busy} onPress={submit} />
+          <View style={styles.divider}>
+            <View style={styles.line} />
+            <Text style={styles.or}>New to MYDL?</Text>
+            <View style={styles.line} />
+          </View>
+          <Button label="Create an account" variant="secondary" icon="user" onPress={() => router.push('/register')} />
+          <View style={styles.trust}>
+            <Icon name="lock" size={14} color={theme.faint} />
+            <Text style={styles.trustText}>Deposits are paid securely by card through Stripe.</Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.bg },
-  link: { color: theme.accent, fontSize: 16, fontWeight: '600', paddingVertical: 6 },
-  error: { color: theme.danger, fontSize: 14 },
+  root: { flex: 1, backgroundColor: theme.ink },
+  top: { paddingHorizontal: 24, paddingBottom: 34, overflow: 'hidden' },
+  ring: { position: 'absolute', right: -90, top: -40, width: 260, height: 260, borderRadius: 130, borderWidth: 1, borderColor: 'rgba(201,168,106,0.28)' },
+  ring2: { position: 'absolute', right: -30, top: 20, width: 160, height: 160, borderRadius: 80, borderWidth: 1, borderColor: 'rgba(201,168,106,0.18)' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 },
+  mark: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, borderColor: theme.gold, alignItems: 'center', justifyContent: 'center' },
+  markText: { fontFamily: fonts.serif, color: theme.gold, fontSize: 17, fontWeight: '700' },
+  brandText: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 24, fontWeight: '700', letterSpacing: 2 },
+  tag: { borderWidth: 1, borderColor: 'rgba(201,168,106,0.45)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  tagText: { color: theme.gold, fontSize: 10, fontWeight: '700', letterSpacing: 1.6 },
+  heroTitle: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 40, lineHeight: 44, fontWeight: '700', marginTop: 34 },
+  heroSub: { color: theme.onInkMuted, fontSize: 15, lineHeight: 22, marginTop: 10, maxWidth: 320 },
+  sheet: { flex: 1, backgroundColor: theme.bg, borderTopLeftRadius: radius.xl + 4, borderTopRightRadius: radius.xl + 4 },
+  sheetContent: { padding: 24, gap: 14, paddingBottom: 40 },
+  title: { fontFamily: fonts.serif, color: theme.text, fontSize: 28, fontWeight: '700', marginBottom: 4 },
+  forgot: { alignSelf: 'flex-end', marginTop: -4 },
+  link: { color: theme.accent, fontSize: 14.5, fontWeight: '700' },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  line: { flex: 1, height: 1, backgroundColor: theme.border },
+  or: { color: theme.faint, fontSize: 13 },
+  trust: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 },
+  trustText: { color: theme.faint, fontSize: 12.5 },
 });

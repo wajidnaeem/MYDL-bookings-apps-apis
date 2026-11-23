@@ -74,7 +74,7 @@ export const api = {
     deposit: string;
   }) => request<Dashboard & { id: string }>('/provider/appointments', { method: 'POST', body: JSON.stringify(input) }),
   makeQr: (id: string) =>
-    request<{ token: string; previewPath: string }>(`/provider/appointments/${id}/qr`, { method: 'POST' }),
+    request<{ token: string; expiresAt?: number; previewPath: string }>(`/provider/appointments/${id}/qr`, { method: 'POST' }),
   updateVisit: (id: string, input: {
     service: string;
     date: string;

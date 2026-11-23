@@ -8,7 +8,7 @@ type ProviderContextValue = Dashboard & {
   createVisit: (input: Parameters<typeof api.createVisit>[0]) => Promise<string>;
   saveSettings: (input: Partial<Business & Policy>) => Promise<void>;
   connectPayout: () => Promise<string>;
-  makeQr: (id: string) => Promise<void>;
+  makeQr: (id: string) => Promise<{ token: string; expiresAt?: number }>;
   cancelVisit: (id: string) => Promise<void>;
   reportNoShow: (id: string, note: string) => Promise<string>;
   updateVisit: (id: string, input: Parameters<typeof api.updateVisit>[1]) => Promise<void>;
@@ -60,8 +60,9 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
         return result.url;
       },
       async makeQr(id) {
-        await api.makeQr(id);
+        const result = await api.makeQr(id);
         await refresh();
+        return { token: result.token, expiresAt: result.expiresAt };
       },
       async updateVisit(id, input) {
         setData(await api.updateVisit(id, input));

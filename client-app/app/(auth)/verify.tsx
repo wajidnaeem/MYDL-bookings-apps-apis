@@ -1,9 +1,7 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
 
-import { Button, Screen, TextField } from '@/components/ui';
-import { theme } from '@/constants/theme';
+import { Button, Notice, Screen, TextField } from '@/components/ui';
 import { useAuth } from '@/context/AuthContext';
 
 export default function VerifyScreen() {
@@ -31,12 +29,8 @@ export default function VerifyScreen() {
   return (
     <Screen subtitle={`Enter the code sent to ${email}.`}>
       <TextField label="Verification code" value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={6} />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button label={busy ? 'Checking…' : 'Verify and continue'} disabled={busy} onPress={submit} />
+      {error ? <Notice text={error} /> : null}
+      <Button label={busy ? 'Checking…' : 'Verify and continue'} loading={busy} disabled={busy} onPress={submit} />
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  error: { color: theme.danger, fontSize: 14 },
-});
