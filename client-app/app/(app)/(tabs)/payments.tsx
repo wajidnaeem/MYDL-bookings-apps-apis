@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
@@ -7,6 +7,7 @@ import { EmptyState, Screen, SectionHeader, StatusPill, shadow } from '@/compone
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
 import { money, usd } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 function iconFor(title: string): IconName {
   const t = title.toLowerCase();
@@ -25,11 +26,12 @@ export default function PaymentsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Payments" subtitle="Deposits, fees, and refunds.">
-        <View style={styles.hero}>
-          <Text style={styles.heroLabel}>Held right now</Text>
-          <Text style={styles.heroValue}>{usd(held)}</Text>
-          <Text style={styles.heroNote}>Paid to the provider after your QR check-in, or refunded under the agreed terms.</Text>
+      <Screen
+        hero
+        eyebrow="Held right now"
+        title={usd(held)}
+        subtitle="Paid to the provider after your QR check-in, or refunded under the agreed terms."
+        heroContent={
           <View style={styles.split}>
             <View style={styles.splitItem}>
               <Text style={styles.splitLabel}>Released</Text>
@@ -41,7 +43,7 @@ export default function PaymentsScreen() {
               <Text style={styles.splitValue}>{usd(refunded)}</Text>
             </View>
           </View>
-        </View>
+        }>
 
         <SectionHeader title="History" count={transactions.length} />
         {transactions.length === 0 ? <EmptyState icon="card" title="No payments yet." body="Deposits you pay will appear here with a receipt." /> : null}
@@ -72,16 +74,16 @@ export default function PaymentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.bg },
+  safe: { flex: 1, backgroundColor: theme.ink },
   hero: { backgroundColor: theme.ink, borderRadius: radius.xl, padding: 20 },
   heroLabel: { color: theme.gold, fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
   heroValue: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 44, fontWeight: '700', marginTop: 10 },
   heroNote: { color: theme.onInkMuted, fontSize: 14, marginTop: 2, lineHeight: 20 },
-  split: { flexDirection: 'row', marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(245,240,230,0.10)' },
+  split: { flexDirection: 'row', paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(245,240,230,0.10)' },
   splitItem: { flex: 1 },
   splitDivider: { width: 1, backgroundColor: 'rgba(245,240,230,0.10)', marginHorizontal: 16 },
   splitLabel: { color: theme.onInkMuted, fontSize: 12.5 },
-  splitValue: { color: theme.onInk, fontSize: 18, fontWeight: '700', marginTop: 2 },
+  splitValue: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 24, fontWeight: '700', marginTop: 2 },
   list: { backgroundColor: theme.card, borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', ...shadow },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
   rowIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: theme.goldSoft, alignItems: 'center', justifyContent: 'center' },

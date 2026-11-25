@@ -1,13 +1,14 @@
 import { useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Steps } from '@/components/Steps';
 import { Button, EmptyState, Notice, Screen, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 export default function CheckoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

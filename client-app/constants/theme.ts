@@ -2,15 +2,15 @@ import { Platform } from 'react-native';
 
 export const theme = {
   // Surfaces
-  bg: '#F6F3EC',
+  bg: '#F5F1EA',
   card: '#FFFFFF',
   cardMuted: '#FBF9F4',
   ink: '#0D1014',
   ink2: '#1A2029',
   ink3: '#262E39',
   ivory: '#F5F0E6',
-  border: '#E8E2D6',
-  borderSoft: '#F0EBE2',
+  border: '#ECE5D8',
+  borderSoft: '#F2EDE4',
 
   // Text
   text: '#14181D',
@@ -39,8 +39,29 @@ export const theme = {
   neutralSoft: '#EFEDE8',
 };
 
+/** `fonts.serif` is a marker the Text wrapper turns into Cormorant Garamond. */
 export const fonts = {
-  serif: Platform.select({ ios: 'Georgia', android: 'serif', default: "Georgia, 'Times New Roman', serif" }),
+  serif: 'Display',
+  display: 'CormorantGaramond_700Bold',
+  displaySemi: 'CormorantGaramond_600SemiBold',
+  sans: 'Inter_400Regular',
+  sansMedium: 'Inter_500Medium',
+  sansSemi: 'Inter_600SemiBold',
+  sansBold: 'Inter_700Bold',
 };
 
-export const radius = { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 };
+const webFallback = (family: string, serif: boolean) =>
+  Platform.OS === 'web' ? `${family}, ${serif ? "'Cormorant Garamond', Georgia, serif" : "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif"}` : family;
+
+/** Picks the loaded font file that matches a style's family and weight. */
+export function fontFor(family: unknown, weight: unknown) {
+  if (typeof family === 'string' && family !== fonts.serif && family !== 'Display') return family;
+  const w = Number(weight === 'bold' ? 700 : weight === 'normal' || weight == null ? 400 : weight);
+  if (family === fonts.serif) return webFallback(w >= 700 ? fonts.display : fonts.displaySemi, true);
+  if (w >= 700) return webFallback(fonts.sansBold, false);
+  if (w >= 600) return webFallback(fonts.sansSemi, false);
+  if (w >= 500) return webFallback(fonts.sansMedium, false);
+  return webFallback(fonts.sans, false);
+}
+
+export const radius = { sm: 10, md: 16, lg: 22, xl: 28, pill: 999 };

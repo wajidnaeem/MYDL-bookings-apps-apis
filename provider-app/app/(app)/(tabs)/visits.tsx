@@ -30,11 +30,13 @@ export default function VisitsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Screen
+        hero
+        eyebrow="Schedule"
         title="Visits"
         subtitle="Pending, upcoming, completed, and cancelled."
         right={
           <Pressable accessibilityRole="button" accessibilityLabel="New visit" onPress={() => router.push('/visit/new')} style={styles.add}>
-            <Icon name="plus" size={22} color={theme.onInk} strokeWidth={2.2} />
+            <Icon name="plus" size={22} color={theme.ink} strokeWidth={2.2} />
           </Pressable>
         }>
         <Chips options={filters.map((item) => ({ ...item, count: count(item.id) }))} value={filter} onChange={setFilter} />
@@ -50,6 +52,6 @@ export default function VisitsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.bg },
-  add: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: theme.ink, alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1, backgroundColor: theme.ink },
+  add: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: theme.gold, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,10 +1,11 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
 import { EmptyState, Screen, shadow } from '@/components/ui';
 import { radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
+import { Text } from '@/components/Text';
 
 function look(title: string): { icon: IconName; fg: string; bg: string } {
   const t = title.toLowerCase();
@@ -20,7 +21,7 @@ export default function AlertsScreen() {
   const { notifications } = useProvider();
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Alerts" subtitle="Deposits, cancellations, attendance, and disputes.">
+      <Screen hero eyebrow="Activity" title="Alerts" subtitle="Deposits, cancellations, attendance, and disputes.">
         {notifications.length === 0 ? <EmptyState icon="bell" title="No alerts yet." body="You'll be notified here when clients pay, cancel or check in." /> : null}
         <View style={notifications.length ? styles.list : undefined}>
           {notifications.map((item, index) => {
@@ -45,7 +46,7 @@ export default function AlertsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.bg },
+  safe: { flex: 1, backgroundColor: theme.ink },
   list: { backgroundColor: theme.card, borderRadius: radius.lg, borderWidth: 1, borderColor: theme.border, overflow: 'hidden', ...shadow },
   item: { flexDirection: 'row', gap: 14, padding: 16, borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
   icon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },

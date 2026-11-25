@@ -48,3 +48,10 @@ export function useFillOnce(ready: boolean, fill: () => void) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 }
+
+/** Splits "Thu, 20 Nov 2026" into parts for a calendar tile. */
+export function dateParts(date: string) {
+  const m = String(date || '').match(/(?:([A-Za-z]{3})[a-z]*,?\s+)?(\d{1,2})\s+([A-Za-z]{3})/);
+  if (!m) return null;
+  return { weekday: m[1] || '', day: m[2], month: m[3] };
+}

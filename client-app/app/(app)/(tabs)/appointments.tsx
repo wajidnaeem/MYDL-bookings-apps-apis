@@ -28,7 +28,7 @@ export default function AppointmentsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Visits" subtitle="Pending, upcoming, completed, and cancelled appointments.">
+      <Screen hero eyebrow="Your schedule" title="Visits" subtitle="Pending, upcoming, completed, and cancelled appointments.">
         <Chips options={filters.map((item) => ({ ...item, count: count(item.id) }))} value={filter} onChange={setFilter} />
         {visible.length === 0 ? <EmptyState icon="calendar" title="Nothing in this list." /> : null}
         {visible.map((item) => (
@@ -39,4 +39,4 @@ export default function AppointmentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: theme.bg } });
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: theme.ink } });

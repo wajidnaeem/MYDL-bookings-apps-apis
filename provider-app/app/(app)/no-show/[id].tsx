@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Avatar, Button, Card, EmptyState, Notice, Screen, TextField } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
+import { Text } from '@/components/Text';
 
 export default function NoShowScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

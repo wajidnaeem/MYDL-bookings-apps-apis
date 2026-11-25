@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Button, FormSection, Notice, Screen, TextField } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
+import { goBack } from '@/lib/nav';
 import { useFillOnce } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 export default function PayoutScreen() {
   const { business, profile, saveSettings, connectPayout } = useProvider();
@@ -74,7 +76,7 @@ export default function PayoutScreen() {
           setError('');
           try {
             await saveSettings({ payoutMethod, payoutDetails });
-            router.back();
+            goBack('/business');
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not save.');
           } finally {

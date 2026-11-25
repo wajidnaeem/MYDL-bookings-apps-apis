@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Button, Screen, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 export default function ScanResultScreen() {
   const { id, ok } = useLocalSearchParams<{ id: string; ok: string }>();

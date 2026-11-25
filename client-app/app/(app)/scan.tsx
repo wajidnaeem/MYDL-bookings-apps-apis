@@ -1,12 +1,13 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Button, EmptyState, Notice, Screen, TextField } from '@/components/ui';
-import { fonts, radius, theme } from '@/constants/theme';
+import { fontFor, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 export default function ScanScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -92,5 +93,5 @@ const styles = StyleSheet.create({
   idle: { alignItems: 'center', gap: 10, width: 190 },
   idleText: { color: theme.onInkMuted, fontSize: 13.5, lineHeight: 19, textAlign: 'center' },
   stageLabel: { position: 'absolute', bottom: 16, color: theme.onInk, fontSize: 13, fontWeight: '600', backgroundColor: 'rgba(13,16,20,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, overflow: 'hidden' },
-  codeInput: { fontFamily: fonts.serif, fontSize: 20, letterSpacing: 2, textAlign: 'center' },
+  codeInput: { fontFamily: fontFor(undefined, 600), fontSize: 18, letterSpacing: 2, textAlign: 'center' },
 });

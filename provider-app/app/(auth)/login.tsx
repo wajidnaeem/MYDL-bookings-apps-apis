@@ -1,12 +1,13 @@
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { Button, Notice, TextField } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
+import { Text } from '@/components/Text';
 
 export default function LoginScreen() {
   const { signedIn, signIn } = useAuth();

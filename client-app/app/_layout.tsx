@@ -1,6 +1,9 @@
+import { CormorantGaramond_600SemiBold, CormorantGaramond_700Bold } from '@expo-google-fonts/cormorant-garamond';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import 'react-native-reanimated';
@@ -16,6 +19,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    CormorantGaramond_600SemiBold,
+    CormorantGaramond_700Bold,
   });
 
   useEffect(() => {
@@ -27,6 +36,8 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [loaded, error]);
+
+  if (!loaded && !error) return null;
 
   return (
     <AuthProvider>
@@ -40,6 +51,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   return (
     <View style={{ flex: 1, width: '100%', backgroundColor: theme.bg }}>
+      <StatusBar style="dark" />
       <View style={{ flex: 1, width: '100%', maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />

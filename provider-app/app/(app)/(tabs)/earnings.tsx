@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
@@ -8,6 +8,7 @@ import { Avatar, Card, Chips, EmptyState, Screen, SectionHeader, StatusPill } fr
 import { fonts, radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
 import { depositStatus, money, usd } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 type Outcome = 'Held' | 'Released' | 'Kept' | 'Refunded';
 const outcomes: { id: Outcome; color: string; note: string }[] = [
@@ -31,29 +32,32 @@ export default function EarningsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Earnings" subtitle="Deposits held, released after attendance, kept, or refunded.">
-        <View style={styles.hero}>
-          <Text style={styles.heroLabel}>Released and kept</Text>
-          <Text style={styles.heroValue}>{usd(earned)}</Text>
-          <Text style={styles.heroNote}>From {paid.length} paid deposit{paid.length === 1 ? '' : 's'}</Text>
-          <View style={styles.bar}>
-            {all > 0
-              ? totals.filter((t) => t.sum > 0).map((t) => <View key={t.id} style={{ flex: t.sum, backgroundColor: t.color }} />)
-              : <View style={{ flex: 1, backgroundColor: 'rgba(245,240,230,0.12)' }} />}
-          </View>
-          <View style={styles.legend}>
-            {totals.map((t) => (
-              <View key={t.id} style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: t.color }]} />
-                <View>
-                  <Text style={styles.legendLabel}>{t.id}</Text>
-                  <Text style={styles.legendValue}>{usd(t.sum)}</Text>
-                </View>
+      <Screen
+        hero
+        eyebrow="Earnings"
+        title={usd(earned)}
+        subtitle={`Released and kept, from ${paid.length} paid deposit${paid.length === 1 ? '' : 's'}.`}
+        heroContent={
+          <View>
+              <View style={styles.bar}>
+                {all > 0
+                  ? totals.filter((t) => t.sum > 0).map((t) => <View key={t.id} style={{ flex: t.sum, backgroundColor: t.color }} />)
+                  : <View style={{ flex: 1, backgroundColor: 'rgba(245,240,230,0.12)' }} />}
               </View>
-            ))}
-          </View>
-        </View>
-
+              <View style={styles.legend}>
+                {totals.map((t) => (
+                  <View key={t.id} style={styles.legendItem}>
+                    <View style={[styles.dot, { backgroundColor: t.color }]} />
+                    <View>
+                      <Text style={styles.legendLabel}>{t.id}</Text>
+                      <Text style={styles.legendValue}>{usd(t.sum)}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              </View>
+        }>
+        
         <Pressable accessibilityRole="button" onPress={() => router.push('/payout')}>
           <Card style={styles.payout}>
             <View style={[styles.payoutIcon, business.payoutConnected && { backgroundColor: theme.successSoft }]}>
@@ -97,7 +101,7 @@ export default function EarningsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.bg },
+  safe: { flex: 1, backgroundColor: theme.ink },
   hero: { backgroundColor: theme.ink, borderRadius: radius.xl, padding: 20 },
   heroLabel: { color: theme.gold, fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
   heroValue: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 44, fontWeight: '700', marginTop: 10 },

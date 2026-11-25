@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Button, Card, EmptyState, Screen, StatusPill } from '@/components/ui';
 import { theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 export default function DisputesScreen() {
   const { disputes } = useClient();

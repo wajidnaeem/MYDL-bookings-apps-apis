@@ -1,9 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { EmptyState, Screen, StatusPill, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 export default function ReceiptScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

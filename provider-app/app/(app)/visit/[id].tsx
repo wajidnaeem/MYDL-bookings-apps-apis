@@ -1,12 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Share, StyleSheet, Text, View } from 'react-native';
+import { Share, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Button, Card, EmptyState, Notice, Row, Screen, StatusPill } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
+import { goBack } from '@/lib/nav';
 import { depositStatus, visitLabel } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 export default function VisitScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -92,7 +94,7 @@ export default function VisitScreen() {
             setError('');
             try {
               await cancelVisit(visit.id);
-              router.back();
+              goBack('/visits');
             } catch (err) {
               setError(err instanceof Error ? err.message : 'Could not cancel the visit.');
             } finally {

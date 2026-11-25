@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { Icon } from '@/components/Icon';
@@ -8,6 +8,7 @@ import { Button, EmptyState, Notice, Screen, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
 import { apiBase } from '@/lib/api';
+import { Text } from '@/components/Text';
 
 const LIFETIME = 10 * 60 * 1000;
 

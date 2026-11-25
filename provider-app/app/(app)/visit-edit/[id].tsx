@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { VisitForm, type VisitFields } from '@/components/VisitForm';
 import { Button, EmptyState, Notice, Screen } from '@/components/ui';
 import { useProvider } from '@/context/ProviderContext';
+import { goBack } from '@/lib/nav';
 import { useFillOnce } from '@/lib/format';
 
 export default function EditVisitScreen() {
@@ -40,7 +41,7 @@ export default function EditVisitScreen() {
     setError('');
     try {
       await updateVisit(visit!.id, fields);
-      router.back();
+      goBack(`/visit/${visit!.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the visit.');
     } finally {

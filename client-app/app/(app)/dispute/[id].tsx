@@ -1,10 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Card, EmptyState, Notice, Screen, StatusPill } from '@/components/ui';
 import { fonts, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 const steps = ['Submitted', 'In review', 'Decided'];
 

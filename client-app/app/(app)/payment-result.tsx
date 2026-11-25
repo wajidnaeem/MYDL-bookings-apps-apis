@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Steps } from '@/components/Steps';
 import { Button, Screen, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 export default function PaymentResultScreen() {
   const { id, session_id: sessionId } = useLocalSearchParams<{ id?: string; session_id?: string }>();

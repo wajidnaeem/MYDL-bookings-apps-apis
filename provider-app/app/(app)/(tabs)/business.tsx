@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
@@ -7,6 +7,7 @@ import { Avatar, Card, ListItem, Row, Screen, SectionHeader, shadow } from '@/co
 import { fonts, radius, theme } from '@/constants/theme';
 import { useAuth } from '@/context/AuthContext';
 import { useProvider } from '@/context/ProviderContext';
+import { Text } from '@/components/Text';
 
 export default function BusinessScreen() {
   const { signOut } = useAuth();
@@ -15,9 +16,12 @@ export default function BusinessScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Screen title="Business">
+      <Screen
+        hero
+        eyebrow="Your business"
+        heroContent={
         <View style={styles.hero}>
-          <Avatar name={business.businessName} size={60} dark />
+          <Avatar name={business.businessName} size={68} dark />
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={2}>{business.businessName}</Text>
             <Text style={styles.email} numberOfLines={1}>{profile.email}</Text>
@@ -27,6 +31,7 @@ export default function BusinessScreen() {
             </View>
           </View>
         </View>
+        }>
 
         <Card style={{ gap: 0, paddingVertical: 6 }}>
           <Row icon="tag" label="Services" value={business.serviceDetails || 'Not set'} />
@@ -53,9 +58,9 @@ export default function BusinessScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.bg },
-  hero: { backgroundColor: theme.ink, borderRadius: radius.xl, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  name: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 24, fontWeight: '700' },
+  safe: { flex: 1, backgroundColor: theme.ink },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: -6 },
+  name: { fontFamily: fonts.serif, color: theme.onInk, fontSize: 34, lineHeight: 38, fontWeight: '700' },
   email: { color: theme.onInkMuted, fontSize: 13.5, marginTop: 3 },
   payBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: 'rgba(245,240,230,0.08)', alignSelf: 'flex-start', marginTop: 10 },
   payOn: { backgroundColor: theme.successSoft },

@@ -1,8 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { FieldCol, FieldRow, FormSection, TextField } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { money, usd } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 export type VisitFields = {
   service: string;

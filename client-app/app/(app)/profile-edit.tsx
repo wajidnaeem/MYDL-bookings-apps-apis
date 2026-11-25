@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Button, FormSection, Notice, Screen, TextField } from '@/components/ui';
 import { useClient } from '@/context/ClientContext';
+import { goBack } from '@/lib/nav';
 import { useFillOnce } from '@/lib/format';
 
 export default function ProfileEditScreen() {
@@ -27,7 +28,7 @@ export default function ProfileEditScreen() {
     setError('');
     try {
       await updateProfile({ name: name.trim(), email: email.trim(), phone: phone.trim() });
-      router.back();
+      goBack('/profile');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the profile.');
     } finally {

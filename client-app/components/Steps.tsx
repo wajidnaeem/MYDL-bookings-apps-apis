@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { theme } from '@/constants/theme';
+import { Text } from '@/components/Text';
 
 const labels = ['Review terms', 'Pay deposit', 'Check in'];
 

@@ -1,11 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Button, Card, EmptyState, Notice, Screen } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { goBack } from '@/lib/nav';
+import { Text } from '@/components/Text';
 
 export default function CancelScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -70,7 +72,7 @@ export default function CancelScreen() {
           }
         }}
       />
-      <Button label="Keep appointment" variant="ghost" onPress={() => router.back()} />
+      <Button label="Keep appointment" variant="ghost" onPress={() => goBack(`/appointment/${appointment.id}`)} />
     </Screen>
   );
 }

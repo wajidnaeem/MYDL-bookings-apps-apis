@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Button, FormSection, Notice, Screen, TextField } from '@/components/ui';
 import { radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
 import { useFillOnce } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 function pickEvidence(onFile: (file: { name: string; data: string }) => void) {
   const doc = (globalThis as { document?: { createElement: (tag: string) => any } }).document;

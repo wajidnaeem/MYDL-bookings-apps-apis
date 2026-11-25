@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Button, FormSection, Notice, Screen, TextField } from '@/components/ui';
 import { useProvider } from '@/context/ProviderContext';
+import { goBack } from '@/lib/nav';
 import { useFillOnce } from '@/lib/format';
 
 export default function BusinessEditScreen() {
@@ -40,7 +41,7 @@ export default function BusinessEditScreen() {
           setError('');
           try {
             await saveSettings({ businessName, serviceDetails, location, contact });
-            router.back();
+            goBack('/business');
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not save.');
           } finally {

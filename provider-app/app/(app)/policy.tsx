@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/Icon';
 import { Button, FormSection, Notice, Screen, TextField, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useProvider } from '@/context/ProviderContext';
+import { goBack } from '@/lib/nav';
 import { useFillOnce } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 function PreviewRule({ icon, title, body }: { icon: IconName; title: string; body: string }) {
   return (
@@ -68,7 +70,7 @@ export default function PolicyScreen() {
           setError('');
           try {
             await saveSettings({ lateAfterMinutes: Number(lateAfterMinutes) || 15, lateFee, noShow, cancellation });
-            router.back();
+            goBack('/business');
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not save.');
           } finally {

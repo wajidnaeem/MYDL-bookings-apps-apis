@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon, type IconName } from '@/components/Icon';
 import { Steps } from '@/components/Steps';
 import { Avatar, Button, EmptyState, Notice, Screen, shadow } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { Text } from '@/components/Text';
 
 function Rule({ icon, title, body, last }: { icon: IconName; title: string; body: string; last?: boolean }) {
   return (

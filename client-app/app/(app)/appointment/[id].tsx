@@ -1,12 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Avatar, Button, Card, EmptyState, Notice, Row, Screen, StatusPill } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { useClient } from '@/context/ClientContext';
+import { goBack } from '@/lib/nav';
 import { visitLabel } from '@/lib/format';
+import { Text } from '@/components/Text';
 
 export default function AppointmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -87,7 +89,7 @@ export default function AppointmentDetailScreen() {
               setError('');
               try {
                 await declineInvitation(appointment.id);
-                router.back();
+                goBack('/');
               } catch (err) {
                 setError(err instanceof Error ? err.message : 'Could not decline the invitation.');
               } finally {
