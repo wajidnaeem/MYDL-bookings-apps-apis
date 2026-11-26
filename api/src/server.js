@@ -95,6 +95,7 @@ function addColumn(table, column, type) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all();
   if (!columns.some((item) => item.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
+addColumn('notifications', 'appointment_id', 'TEXT');
 addColumn('appointments', 'deposit_outcome', 'TEXT');
 addColumn('appointments', 'stripe_session_id', 'TEXT');
 addColumn('appointments', 'stripe_payment_intent', 'TEXT');
@@ -288,6 +289,49 @@ async function releaseStripeDeposit(row) {
   });
 }
 
+// Phone apps can't open localhost, so a native client passes its own deep link (e.g. exp://… in Expo Go).
+// Stripe returns to this API's /checkout/return page, which hands the session back to the app.
+const APP_RETURN_SCHEMES = ['exp:', 'exps:', 'clientapp:'];
+
+function safeAppReturnUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    return APP_RETURN_SCHEMES.includes(parsed.protocol) ? parsed.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function checkoutReturnUrls(req, row, body) {
+  const returnUrl = safeAppReturnUrl(body?.returnUrl);
+  if (!returnUrl) {
+    return {
+      success_url: `${appUrl('CLIENT_APP_URL', 'http://localhost:8081')}/payment-result?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appUrl('CLIENT_APP_URL', 'http://localhost:8081')}/checkout/${row.id}`,
+    };
+  }
+  const bounce = `http://${req.headers.host}/checkout/return?to=${encodeURIComponent(returnUrl)}`;
+  return {
+    success_url: `${bounce}&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${bounce}&cancelled=1`,
+  };
+}
+
+// Marks a deposit paid once Stripe reports the checkout session as paid. Safe to call more than once.
+async function recordCheckoutPayment(stripe, session, row) {
+  if (row.deposit_paid || session.payment_status !== 'paid' || session.client_reference_id !== row.id) return;
+  const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  markDepositPaid(row, paymentIntentId);
+  if (paymentIntentId) {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const methodId = typeof intent.payment_method === 'string' ? intent.payment_method : intent.payment_method?.id;
+    if (methodId) db.prepare('UPDATE appointments SET stripe_payment_method = ? WHERE id = ?').run(methodId, row.id);
+  }
+  audit(row.client_id, 'deposit-paid', `${row.deposit} for ${row.service}`);
+  await notify(row.client_id, 'Deposit held', `${row.deposit} for ${row.provider_name} is held until the visit.`, row.id);
+  if (row.provider_id) await notify(row.provider_id, 'Deposit received', `${row.deposit} from a client is held for ${row.service}.`, row.id);
+}
+
 function markDepositPaid(row, paymentIntentId) {
   db.prepare("UPDATE appointments SET status = 'upcoming', deposit_paid = 1, stripe_payment_intent = ? WHERE id = ?").run(paymentIntentId || row.stripe_payment_intent, row.id);
   insertTransaction(row.client_id, 'Deposit', `${row.provider_name} · ${row.service}`, row.deposit, 'Held');
@@ -375,14 +419,14 @@ function snapshot(userId) {
       id: row.id, title: row.title, detail: row.detail, status: row.status, evidence: row.evidence || undefined,
     })),
     notifications: db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC').all(userId).map((row) => ({
-      id: row.id, title: row.title, body: row.body, time: when(row.created_at),
+      id: row.id, title: row.title, body: row.body, time: when(row.created_at), appointmentId: row.appointment_id || undefined,
     })),
   };
 }
 
-async function notify(userId, title, body) {
+async function notify(userId, title, body, appointmentId = null) {
   const id = crypto.randomUUID();
-  db.prepare('INSERT INTO notifications (id, user_id, title, body, created_at) VALUES (?, ?, ?, ?, ?)').run(id, userId, title, body, Date.now());
+  db.prepare('INSERT INTO notifications (id, user_id, title, body, created_at, appointment_id) VALUES (?, ?, ?, ?, ?, ?)').run(id, userId, title, body, Date.now(), appointmentId);
   const tokens = db.prepare('SELECT token FROM push_tokens WHERE user_id = ?').all(userId);
   if (!tokens.length) return;
   await fetch('https://exp.host/--/api/v2/push/send', {
@@ -489,7 +533,7 @@ function providerSnapshot(user) {
       id: row.id, title: row.title, detail: row.detail, status: row.status, evidence: row.evidence || undefined,
     })),
     notifications: db.prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC').all(user.id).map((row) => ({
-      id: row.id, title: row.title, body: row.body, time: when(row.created_at),
+      id: row.id, title: row.title, body: row.body, time: when(row.created_at), appointmentId: row.appointment_id || undefined,
     })),
   };
 }
@@ -680,6 +724,33 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && url.pathname === '/checkout/return') {
+      const to = safeAppReturnUrl(url.searchParams.get('to'));
+      if (!to) return send(res, 400, { error: 'Invalid return address.' });
+      const target = new URL(to);
+      const sessionId = url.searchParams.get('session_id');
+      if (sessionId) target.searchParams.set('session_id', sessionId);
+      if (url.searchParams.get('cancelled')) target.searchParams.set('cancelled', '1');
+      // Record the payment here, so it counts even if the phone never returns to the app.
+      let paid = false;
+      if (sessionId) {
+        try {
+          const stripe = requireStripe();
+          const session = await stripe.checkout.sessions.retrieve(sessionId);
+          const row = db.prepare('SELECT * FROM appointments WHERE id = ? AND stripe_session_id = ?').get(session.client_reference_id, session.id);
+          if (row) await recordCheckoutPayment(stripe, session, row);
+          paid = session.payment_status === 'paid';
+        } catch {
+          paid = false;
+        }
+      }
+      const href = target.toString().replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+      const heading = sessionId ? (paid ? 'Payment complete &#10003;' : 'Payment not confirmed yet') : 'Payment cancelled';
+      const page = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Back to MYDL</title><body style="font-family:sans-serif;text-align:center;padding:40px 16px;color:#111"><h2>${heading}</h2><p>Close this window to go back to the MYDL app.</p><p style="margin-top:28px"><a href="${href}" style="display:inline-block;padding:14px 22px;background:#111;color:#fff;border-radius:12px;text-decoration:none">Open MYDL</a></p><script>location.replace(${JSON.stringify(target.toString())});</script></body>`;
+      send(res, 200, page, 'text/html; charset=utf-8');
+      return;
+    }
+
     const user = requireUser(req, res);
     if (!user) return;
 
@@ -723,7 +794,8 @@ const server = http.createServer(async (req, res) => {
       const row = ownAppointment(user, parts[1]);
       if (!row) return send(res, 404, { error: 'Appointment not found.' });
       db.prepare("UPDATE appointments SET status = 'cancelled' WHERE id = ?").run(row.id);
-      await notify(user.id, 'Invitation declined', 'You declined the appointment invitation.');
+      await notify(user.id, 'Invitation declined', 'You declined the appointment invitation.', row.id);
+      if (row.provider_id) await notify(row.provider_id, 'Invitation declined', `${user.name} declined ${row.service} on ${row.date}.`, row.id);
       send(res, 200, snapshot(user.id));
       return;
     }
@@ -755,8 +827,7 @@ const server = http.createServer(async (req, res) => {
             product_data: { name: `${row.provider_name} deposit · ${row.service}` },
           },
         }],
-        success_url: `${appUrl('CLIENT_APP_URL', 'http://localhost:8081')}/payment-result?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appUrl('CLIENT_APP_URL', 'http://localhost:8081')}/checkout/${row.id}`,
+        ...checkoutReturnUrls(req, row, await readBody(req)),
         metadata: { appointmentId: row.id },
         payment_intent_data: { setup_future_usage: 'off_session', metadata: { appointmentId: row.id } },
       });
@@ -772,17 +843,19 @@ const server = http.createServer(async (req, res) => {
       if (session.payment_status !== 'paid') return send(res, 402, { error: 'The card payment is not complete.' });
       const row = ownAppointment(user, session.client_reference_id);
       if (!row) return send(res, 404, { error: 'Appointment not found.' });
-      const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-      if (!row.deposit_paid) {
-        markDepositPaid(row, paymentIntentId);
-        if (paymentIntentId) {
-          const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
-          const methodId = typeof intent.payment_method === 'string' ? intent.payment_method : intent.payment_method?.id;
-          if (methodId) db.prepare('UPDATE appointments SET stripe_payment_method = ? WHERE id = ?').run(methodId, row.id);
-        }
-        audit(user.id, 'deposit-paid', `${row.deposit} for ${row.service}`);
-        await notify(user.id, 'Deposit held', `${row.deposit} for ${row.provider_name} is held until the visit.`);
-        if (row.provider_id) await notify(row.provider_id, 'Deposit received', `${row.deposit} from a client is held for ${row.service}.`);
+      await recordCheckoutPayment(stripe, session, row);
+      send(res, 200, snapshot(user.id));
+      return;
+    }
+
+    // Called by the phone app when the Stripe window closes, in case the redirect back to the app didn't happen.
+    if (req.method === 'POST' && parts[0] === 'appointments' && parts[2] === 'payment-status') {
+      const row = ownAppointment(user, parts[1]);
+      if (!row) return send(res, 404, { error: 'Appointment not found.' });
+      if (!row.deposit_paid && row.stripe_session_id) {
+        const stripe = requireStripe();
+        const session = await stripe.checkout.sessions.retrieve(row.stripe_session_id);
+        if (session.payment_status === 'paid') await recordCheckoutPayment(stripe, session, row);
       }
       send(res, 200, snapshot(user.id));
       return;
@@ -815,8 +888,8 @@ const server = http.createServer(async (req, res) => {
           else insertTransaction(user.id, 'Deposit kept', detail, row.deposit, 'Kept');
           message = `The ${row.deposit} deposit is kept because this is inside 24 hours of the visit.`;
         }
-        await notify(user.id, 'Appointment cancelled', message);
-        if (row.provider_id) await notify(row.provider_id, 'Appointment cancelled', `${user.name} cancelled ${row.service}. ${message}`);
+        await notify(user.id, 'Appointment cancelled', message, row.id);
+        if (row.provider_id) await notify(row.provider_id, 'Appointment cancelled', `${user.name} cancelled ${row.service}. ${message}`, row.id);
       }
       send(res, 200, snapshot(user.id));
       return;
@@ -828,7 +901,9 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const code = String(body.code || '').trim();
       const expired = !row.qr_expires_at || row.qr_expires_at < Date.now();
-      const matches = row.qr_token && code === row.qr_token && !expired;
+      // Only a paid, upcoming visit that hasn't been checked in yet can be confirmed (prevents double release / double late fee).
+      const checkInAllowed = row.status === 'upcoming' && row.deposit_paid && !row.attended;
+      const matches = checkInAllowed && row.qr_token && code === row.qr_token && !expired;
       if (!matches) {
         send(res, 200, { ok: false, ...snapshot(user.id) });
         return;
@@ -837,7 +912,7 @@ const server = http.createServer(async (req, res) => {
       try {
         await releaseStripeDeposit(row);
       } catch (releaseError) {
-        await notify(row.provider_id || user.id, 'Payout pending', releaseError instanceof Error ? releaseError.message : 'The deposit is released in MYDL, but the bank transfer is still pending.');
+        await notify(row.provider_id || user.id, 'Payout pending', releaseError instanceof Error ? releaseError.message : 'The deposit is released in MYDL, but the bank transfer is still pending.', row.id);
       }
       const rules = rulesFor(row.provider_id);
       const start = appointmentStart(row);
@@ -865,11 +940,11 @@ const server = http.createServer(async (req, res) => {
         }
         insertTransaction(user.id, 'Late fee', `${row.provider_name} · ${row.service}`, rules.lateFee, charged ? 'Charged' : 'Due');
         audit(user.id, 'late-fee', `${rules.lateFee} ${charged ? 'charged' : 'due'} for ${row.service}`);
-        if (row.provider_id) await notify(row.provider_id, 'Late fee', `A late fee of ${rules.lateFee} ${charged ? 'was charged' : 'is due'} for ${row.service}.`);
+        if (row.provider_id) await notify(row.provider_id, 'Late fee', `A late fee of ${rules.lateFee} ${charged ? 'was charged' : 'is due'} for ${row.service}.`, row.id);
       }
       await notify(user.id, 'Attendance confirmed', late
         ? `Your visit with ${row.provider_name} is confirmed. A late fee of ${rules.lateFee} applies.`
-        : `Your visit with ${row.provider_name} is confirmed.`);
+        : `Your visit with ${row.provider_name} is confirmed.`, row.id);
       send(res, 200, { ok: true, ...snapshot(user.id) });
       return;
     }
@@ -883,7 +958,7 @@ const server = http.createServer(async (req, res) => {
       db.prepare('INSERT INTO disputes (id, user_id, appointment_id, title, detail, evidence, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
         id, user.id, row.id, 'Provider no-show', detail, null, 'In review', Date.now(),
       );
-      await notify(user.id, 'No-show reported', 'An administrator will review the claim.');
+      await notify(user.id, 'No-show reported', 'An administrator will review the claim.', row.id);
       send(res, 201, { id, ...snapshot(user.id) });
       return;
     }
@@ -901,7 +976,7 @@ const server = http.createServer(async (req, res) => {
         id, user.id, body.appointmentId || null, String(body.title || 'Dispute').trim(), detail, evidence, 'In review', Date.now(),
       );
       audit(user.id, 'dispute-opened', String(body.title || 'Dispute'));
-      await notify(user.id, 'Dispute opened', 'You can track the decision in Disputes.');
+      await notify(user.id, 'Dispute opened', 'You can track the decision in Disputes.', body.appointmentId || null);
       const payload = user.role === 'provider' ? providerSnapshot(user) : snapshot(user.id);
       send(res, 201, { id, ...payload });
       return;
@@ -910,6 +985,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/provider/appointments') {
       if (!requireRole(user, res, 'provider')) return;
       const body = await readBody(req);
+      if (appointmentStart({ date: body.date, time: body.time, timezone: body.timezone }) == null) {
+        return send(res, 400, { error: 'Choose a valid date and time.' });
+      }
       const client = db.prepare('SELECT * FROM users WHERE email = ? AND role = ?').get(String(body.clientEmail || '').trim().toLowerCase(), 'client');
       if (!client) {
         send(res, 404, { error: 'No client account uses that email.' });
@@ -922,7 +1000,7 @@ const server = http.createServer(async (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, 0)`).run(
         id, client.id, user.id, settings?.business_name || user.name, String(body.service || 'Appointment'), String(body.date || ''), String(body.time || ''), String(body.timezone || 'UTC'), String(body.duration || '30 min'), String(body.location || settings?.location || ''), String(body.price || '$0.00'), String(body.deposit || '$0.00'),
       );
-      await notify(client.id, 'Appointment invitation', `${user.name} invited you to ${body.service || 'an appointment'}.`);
+      await notify(client.id, 'Appointment invitation', `${user.name} invited you to ${body.service || 'an appointment'}.`, id);
       const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
       send(res, 201, { id, ...providerSnapshot(fresh) });
       return;
@@ -934,6 +1012,9 @@ const server = http.createServer(async (req, res) => {
       if (!row) return send(res, 404, { error: 'Appointment not found.' });
       if (row.status === 'completed' || row.status === 'cancelled') return send(res, 400, { error: 'This visit can no longer be edited.' });
       const body = await readBody(req);
+      if (appointmentStart({ date: body.date || row.date, time: body.time || row.time, timezone: body.timezone || row.timezone }) == null) {
+        return send(res, 400, { error: 'Choose a valid date and time.' });
+      }
       db.prepare(`UPDATE appointments SET service = ?, date = ?, time = ?, timezone = ?, duration = ?, location = ?, price = ?, deposit = ?, reminded = 0 WHERE id = ?`).run(
         String(body.service || row.service),
         String(body.date || row.date),
@@ -945,7 +1026,7 @@ const server = http.createServer(async (req, res) => {
         String(body.deposit || row.deposit),
         row.id,
       );
-      if (row.client_id) await notify(row.client_id, 'Visit updated', `${user.name} updated ${body.service || row.service}.`);
+      if (row.client_id) await notify(row.client_id, 'Visit updated', `${user.name} updated ${body.service || row.service}.`, row.id);
       audit(user.id, 'visit-updated', row.id);
       send(res, 200, providerSnapshot(user));
       return;
@@ -955,6 +1036,10 @@ const server = http.createServer(async (req, res) => {
       if (!requireRole(user, res, 'provider')) return;
       const row = db.prepare('SELECT * FROM appointments WHERE id = ? AND provider_id = ?').get(parts[2], user.id);
       if (!row) return send(res, 404, { error: 'Appointment not found.' });
+      if (row.attended) return send(res, 409, { error: 'This client is already checked in.' });
+      if (row.status !== 'upcoming' || !row.deposit_paid) {
+        return send(res, 409, { error: 'A check-in code is available once the client has accepted and paid the deposit.' });
+      }
       const token = `MYDL-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       const expiresAt = Date.now() + 1000 * 60 * 10;
       db.prepare('UPDATE appointments SET qr_token = ?, qr_expires_at = ? WHERE id = ?').run(token, expiresAt, row.id);
@@ -968,22 +1053,31 @@ const server = http.createServer(async (req, res) => {
       const settings = db.prepare('SELECT * FROM provider_settings WHERE user_id = ?').get(user.id);
       let accountId = settings?.stripe_account_id;
       if (!accountId) {
-        const account = await stripe.accounts.create({
-          type: 'express',
-          country: process.env.STRIPE_CONNECT_COUNTRY || 'US',
-          email: user.email,
-          capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
-          business_profile: { name: settings?.business_name || user.name },
+        // Stripe requires Accounts v2 (POST /v2/core/accounts) with Stripe-managed risk for new connected accounts.
+        const account = await stripe.v2.core.accounts.create({
+          display_name: settings?.business_name || user.name,
+          contact_email: user.email,
+          identity: { country: (process.env.STRIPE_CONNECT_COUNTRY || 'US').toLowerCase() },
+          dashboard: 'express',
+          defaults: { responsibilities: { fees_collector: 'stripe', losses_collector: 'stripe' } },
+          configuration: {
+            merchant: { capabilities: { card_payments: { requested: true } } },
+            recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } },
+          },
         });
         accountId = account.id;
         if (settings) db.prepare('UPDATE provider_settings SET stripe_account_id = ? WHERE user_id = ?').run(accountId, user.id);
         else db.prepare('INSERT INTO provider_settings (user_id, business_name, stripe_account_id) VALUES (?, ?, ?)').run(user.id, user.name, accountId);
       }
-      const link = await stripe.accountLinks.create({
+      const link = await stripe.v2.core.accountLinks.create({
         account: accountId,
-        type: 'account_onboarding',
-        refresh_url: `${appUrl('PROVIDER_APP_URL', 'http://localhost:8082')}/payout`,
-        return_url: `${appUrl('PROVIDER_APP_URL', 'http://localhost:8082')}/payout`,
+        use_case: {
+          type: 'account_onboarding',
+          account_onboarding: {
+            refresh_url: `${appUrl('PROVIDER_APP_URL', 'http://localhost:8082')}/payout`,
+            return_url: `${appUrl('PROVIDER_APP_URL', 'http://localhost:8082')}/payout`,
+          },
+        },
       });
       send(res, 200, { url: link.url });
       return;
@@ -1044,9 +1138,9 @@ const server = http.createServer(async (req, res) => {
           db.prepare('INSERT INTO transactions (id, user_id, title, detail, amount, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
             crypto.randomUUID(), row.client_id, 'Refund', `${row.provider_name} · ${row.service}`, row.deposit, 'Refunded', Date.now(),
           );
-          await notify(row.client_id, 'Appointment cancelled', `${user.name} cancelled the visit. The deposit is refunded.`);
+          await notify(row.client_id, 'Appointment cancelled', `${user.name} cancelled the visit. The deposit is refunded.`, row.id);
         }
-        await notify(user.id, 'Appointment cancelled', `${row.service} was cancelled.`);
+        await notify(user.id, 'Appointment cancelled', `${row.service} was cancelled.`, row.id);
       }
       send(res, 200, providerSnapshot(user));
       return;
@@ -1064,8 +1158,8 @@ const server = http.createServer(async (req, res) => {
       );
       keepDeposit(row);
       audit(user.id, 'client-no-show', `${row.service} deposit kept`);
-      if (row.client_id) await notify(row.client_id, 'No-show claim', `${user.name} reported that you did not attend. The deposit is kept.`);
-      await notify(user.id, 'No-show submitted', 'The deposit is kept under the no-show rule. An administrator can still review the claim.');
+      if (row.client_id) await notify(row.client_id, 'No-show claim', `${user.name} reported that you did not attend. The deposit is kept.`, row.id);
+      await notify(user.id, 'No-show submitted', 'The deposit is kept under the no-show rule. An administrator can still review the claim.', row.id);
       send(res, 201, { id, ...providerSnapshot(user) });
       return;
     }
@@ -1116,7 +1210,7 @@ const server = http.createServer(async (req, res) => {
       }
       db.prepare('UPDATE disputes SET status = ? WHERE id = ?').run(status, row.id);
       audit(user.id, 'dispute-updated', `${row.id} is now ${status}`);
-      await notify(row.user_id, 'Dispute updated', `Your dispute is now ${status}.`);
+      await notify(row.user_id, 'Dispute updated', `Your dispute is now ${status}.`, row.appointment_id);
       send(res, 200, { ok: true });
       return;
     }
@@ -1169,8 +1263,8 @@ function sendReminders() {
     if (start == null) continue;
     const until = start - Date.now();
     if (until > 0 && until <= 24 * 60 * 60 * 1000) {
-      notify(row.client_id, 'Upcoming visit', `${row.provider_name} · ${row.service} is within 24 hours, ${row.date} at ${row.time}.`).catch(() => {});
-      if (row.provider_id) notify(row.provider_id, 'Upcoming visit', `${row.service} is within 24 hours.`).catch(() => {});
+      notify(row.client_id, 'Upcoming visit', `${row.provider_name} · ${row.service} is within 24 hours, ${row.date} at ${row.time}.`, row.id).catch(() => {});
+      if (row.provider_id) notify(row.provider_id, 'Upcoming visit', `${row.service} is within 24 hours.`, row.id).catch(() => {});
       db.prepare('UPDATE appointments SET reminded = 1 WHERE id = ?').run(row.id);
     }
   }

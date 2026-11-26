@@ -38,6 +38,7 @@ export type Notice = {
   title: string;
   body: string;
   time: string;
+  appointmentId?: string;
 };
 
 export const policy = {

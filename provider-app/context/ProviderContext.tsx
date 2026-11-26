@@ -41,6 +41,9 @@ export function ProviderProvider({ children }: { children: ReactNode }) {
       return;
     }
     refresh().catch(() => {});
+    // Keep the screens current with what clients do (payments, check-ins, cancellations).
+    const timer = setInterval(() => refresh().catch(() => {}), 10000);
+    return () => clearInterval(timer);
   }, [signedIn, refresh]);
 
   const value = useMemo<ProviderContextValue>(

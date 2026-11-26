@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -47,12 +47,20 @@ function Countdown({ expiresAt }: { expiresAt: number }) {
 
 export default function QrScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { appointments, makeQr } = useProvider();
+  const { appointments, makeQr, refresh } = useProvider();
   const visit = appointments.find((item) => item.id === id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
   const [code, setCode] = useState<{ token: string; expiresAt?: number } | null>(null);
+  const attended = Boolean(visit?.attended);
+
+  // While the code is on screen, check often so the provider sees the scan almost immediately.
+  useEffect(() => {
+    if (attended) return;
+    const timer = setInterval(() => refresh().catch(() => {}), 3000);
+    return () => clearInterval(timer);
+  }, [attended, refresh]);
 
   if (!visit) {
     return (
@@ -77,6 +85,23 @@ export default function QrScreen() {
   }
 
   const showing = visit.hasQr || version > 0;
+
+  if (attended) {
+    return (
+      <Screen>
+        <View style={styles.card}>
+          <Text style={styles.client}>{visit.clientName || 'Client'}</Text>
+          <Text style={styles.service}>{visit.service} · {visit.time}</Text>
+          <View style={[styles.qrFrame, styles.placeholder]}>
+            <Icon name="check" size={56} color={theme.success} strokeWidth={1.6} />
+            <Text style={styles.hint}>Checked in</Text>
+          </View>
+        </View>
+        <Notice tone="success" text="The client scanned your code. Attendance is confirmed and the held deposit is released." />
+        <Button label="Back to visit" variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.replace(`/visit/${visit.id}`))} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen subtitle="Show this to the client when they arrive. It expires 10 minutes after you generate it.">

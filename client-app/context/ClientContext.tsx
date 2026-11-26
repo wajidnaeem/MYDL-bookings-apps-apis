@@ -21,8 +21,9 @@ type ClientContextValue = {
   updateProfile: (profile: Profile) => Promise<void>;
   declineInvitation: (id: string) => Promise<void>;
   acceptPolicy: (id: string) => Promise<void>;
-  payDeposit: (id: string) => Promise<string>;
+  payDeposit: (id: string, returnUrl?: string) => Promise<string>;
   confirmPayment: (sessionId: string) => Promise<void>;
+  syncPayment: (id: string) => Promise<boolean>;
   cancelAppointment: (id: string) => Promise<void>;
   confirmAttendance: (id: string, code: string) => Promise<boolean>;
   reportProviderNoShow: (id: string, note: string) => Promise<string>;
@@ -71,7 +72,11 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       setNotifications([]);
       return;
     }
-    api.me().then((snapshot) => apply(snapshot, setters)).catch(() => {});
+    const load = () => api.me().then((snapshot) => apply(snapshot, setters)).catch(() => {});
+    load();
+    // Keep the screens current with what the provider does (invitations, edits, cancellations).
+    const timer = setInterval(load, 10000);
+    return () => clearInterval(timer);
   }, [signedIn, setters]);
 
   const updateProfile = useCallback(async (next: Profile) => {
@@ -86,13 +91,19 @@ export function ClientProvider({ children }: { children: ReactNode }) {
     apply(await api.acceptPolicy(id), setters);
   }, [setters]);
 
-  const payDeposit = useCallback(async (id: string) => {
-    const result = await api.pay(id);
+  const payDeposit = useCallback(async (id: string, returnUrl?: string) => {
+    const result = await api.pay(id, returnUrl);
     return result.url;
   }, []);
 
   const confirmPayment = useCallback(async (sessionId: string) => {
     apply(await api.confirmPayment(sessionId), setters);
+  }, [setters]);
+
+  const syncPayment = useCallback(async (id: string) => {
+    const snapshot = await api.paymentStatus(id);
+    apply(snapshot, setters);
+    return Boolean(snapshot.appointments.find((item) => item.id === id)?.depositPaid);
   }, [setters]);
 
   const cancelAppointment = useCallback(async (id: string) => {
@@ -130,6 +141,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       acceptPolicy,
       payDeposit,
       confirmPayment,
+      syncPayment,
       cancelAppointment,
       confirmAttendance,
       reportProviderNoShow,
@@ -147,6 +159,7 @@ export function ClientProvider({ children }: { children: ReactNode }) {
       acceptPolicy,
       payDeposit,
       confirmPayment,
+      syncPayment,
       cancelAppointment,
       confirmAttendance,
       reportProviderNoShow,

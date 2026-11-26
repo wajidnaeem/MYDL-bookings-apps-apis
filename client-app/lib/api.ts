@@ -66,7 +66,9 @@ export const api = {
   updateProfile: (profile: Snapshot['profile']) => request<Snapshot>('/me', { method: 'PATCH', body: JSON.stringify(profile) }),
   decline: (id: string) => request<Snapshot>(`/appointments/${id}/decline`, { method: 'POST' }),
   acceptPolicy: (id: string) => request<Snapshot>(`/appointments/${id}/accept-policy`, { method: 'POST' }),
-  pay: (id: string) => request<{ url: string }>(`/appointments/${id}/checkout`, { method: 'POST' }),
+  paymentStatus: (id: string) => request<Snapshot>(`/appointments/${id}/payment-status`, { method: 'POST' }),
+  pay: (id: string, returnUrl?: string) =>
+    request<{ url: string }>(`/appointments/${id}/checkout`, { method: 'POST', body: JSON.stringify(returnUrl ? { returnUrl } : {}) }),
   confirmPayment: (sessionId: string) =>
     request<Snapshot>('/payments/confirm', { method: 'POST', body: JSON.stringify({ sessionId }) }),
   cancel: (id: string) => request<Snapshot>(`/appointments/${id}/cancel`, { method: 'POST' }),

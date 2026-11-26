@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
+import { formatVisitDate } from '@/components/DateTimeFields';
 import { VisitForm, type VisitFields } from '@/components/VisitForm';
 import { Button, FormSection, Notice, Screen, TextField } from '@/components/ui';
 import { useProvider } from '@/context/ProviderContext';
@@ -11,7 +12,7 @@ export default function NewVisitScreen() {
   const [clientEmail, setClientEmail] = useState('amina@example.com');
   const [fields, setFields] = useState<VisitFields>({
     service: 'Consultation',
-    date: 'Thu, 27 Nov 2026',
+    date: formatVisitDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
     time: '3:00 PM',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     duration: '45 min',

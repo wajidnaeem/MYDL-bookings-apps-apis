@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon, type IconName } from '@/components/Icon';
@@ -20,7 +21,7 @@ function look(title: string): { icon: IconName; fg: string; bg: string } {
 }
 
 export default function NotificationsScreen() {
-  const { notifications } = useClient();
+  const { notifications, appointments } = useClient();
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Screen hero eyebrow="Activity" title="Alerts" subtitle="Invitations, deposits, attendance, cancellations, and disputes.">
@@ -28,8 +29,15 @@ export default function NotificationsScreen() {
         <View style={notifications.length ? styles.list : undefined}>
           {notifications.map((item, index) => {
             const l = look(item.title);
+            // Alerts about a visit open that visit, if it still exists.
+            const visitId = item.appointmentId && appointments.some((a) => a.id === item.appointmentId) ? item.appointmentId : undefined;
             return (
-              <View key={item.id} style={[styles.item, index === notifications.length - 1 && { borderBottomWidth: 0 }]}>
+              <Pressable
+                key={item.id}
+                disabled={!visitId}
+                accessibilityRole={visitId ? 'button' : undefined}
+                onPress={() => visitId && router.push(`/appointment/${visitId}`)}
+                style={({ pressed }) => [styles.item, index === notifications.length - 1 && { borderBottomWidth: 0 }, pressed && styles.pressed]}>
                 <View style={[styles.icon, { backgroundColor: l.bg }]}><Icon name={l.icon} size={18} color={l.fg} /></View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.top}>
@@ -38,7 +46,8 @@ export default function NotificationsScreen() {
                   </View>
                   <Text style={styles.body}>{item.body}</Text>
                 </View>
-              </View>
+                {visitId ? <View style={styles.chevron}><Icon name="chevron" size={16} color={theme.faint} /></View> : null}
+              </Pressable>
             );
           })}
         </View>
@@ -56,4 +65,6 @@ const styles = StyleSheet.create({
   title: { flex: 1, color: theme.text, fontSize: 15.5, fontWeight: '700' },
   time: { color: theme.faint, fontSize: 12 },
   body: { color: theme.muted, fontSize: 14, lineHeight: 20, marginTop: 3 },
+  pressed: { backgroundColor: theme.borderSoft },
+  chevron: { alignSelf: 'center' },
 });

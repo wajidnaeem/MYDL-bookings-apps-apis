@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
+import { DateField, TimeField } from '@/components/DateTimeFields';
 import { FieldCol, FieldRow, FormSection, TextField } from '@/components/ui';
 import { fonts, radius, theme } from '@/constants/theme';
 import { money, usd } from '@/lib/format';
@@ -30,8 +31,8 @@ export function VisitForm({ value, onChange }: { value: VisitFields; onChange: (
 
       <FormSection title="When">
         <FieldRow>
-          <FieldCol><TextField label="Date" value={value.date} onChangeText={set('date')} /></FieldCol>
-          <FieldCol><TextField label="Time" value={value.time} onChangeText={set('time')} /></FieldCol>
+          <FieldCol><DateField value={value.date} onChange={set('date')} /></FieldCol>
+          <FieldCol><TimeField value={value.time} onChange={set('time')} /></FieldCol>
         </FieldRow>
         <FieldRow>
           <FieldCol><TextField label="Time zone" value={value.timezone} onChangeText={set('timezone')} autoCapitalize="none" placeholder="America/New_York" /></FieldCol>

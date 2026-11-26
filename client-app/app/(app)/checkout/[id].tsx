@@ -1,4 +1,5 @@
-import { useLocalSearchParams } from 'expo-router';
+import * as Linking from 'expo-linking';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -12,7 +13,7 @@ import { Text } from '@/components/Text';
 
 export default function CheckoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { appointments, payDeposit } = useClient();
+  const { appointments, payDeposit, syncPayment } = useClient();
   const appointment = appointments.find((item) => item.id === id);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,12 +30,21 @@ export default function CheckoutScreen() {
     setBusy(true);
     setError('');
     try {
-      const url = await payDeposit(appointment!.id);
       if (Platform.OS === 'web') {
-        window.location.assign(url);
+        window.location.assign(await payDeposit(appointment!.id));
         return;
       }
-      await WebBrowser.openBrowserAsync(url);
+      // On a phone Stripe can't return to localhost, so it returns to this app's own deep link.
+      const returnUrl = Linking.createURL('/payment-result', { queryParams: { id: appointment!.id } });
+      const url = await payDeposit(appointment!.id, returnUrl);
+      const result = await WebBrowser.openAuthSessionAsync(url, returnUrl);
+      const sessionId = result.type === 'success' ? Linking.parse(result.url).queryParams?.session_id : undefined;
+      if (sessionId) {
+        router.replace(`/payment-result?id=${appointment!.id}&session_id=${sessionId}`);
+        return;
+      }
+      // The Stripe window was closed without returning to the app: ask the server whether the payment went through.
+      if (await syncPayment(appointment!.id)) router.replace(`/payment-result?id=${appointment!.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start the card payment.');
     } finally {
